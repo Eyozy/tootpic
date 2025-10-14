@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en" style="height: 100%;">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,12 +20,12 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
-<body class="bg-brand-gray-50 text-brand-gray-800 font-sans">
-    <div class="min-h-full flex items-center justify-center p-4 py-8 md:py-12">
+<body class="bg-brand-gray-50 text-brand-gray-800 font-sans flex flex-col min-h-screen">
+    <div class="flex-grow flex items-center justify-center p-4 py-8 md:py-12">
         <slot />
     </div>
     
-    <footer class="fixed bottom-0 w-full flex justify-center items-center py-4 text-gray-600">
+    <footer class="w-full flex justify-center items-center py-4 text-gray-600">
         <span class="no-underline">
             &copy; 2025 | Reserved by Eyozy | 
             <a 
