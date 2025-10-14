@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TootPic - Mastodon Toot to Image Converter</title>
+    
+    <meta name="description" content="Turn your Mastodon toots into beautiful, shareable images. Instantly generate a clean screenshot for your social media campaigns.">
+    <meta name="keywords" content="Mastodon, image generator, toot to image, screenshot, social media">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="TootPic - Mastodon Toot to Image Converter">
+    <meta property="og:description" content="Turn your Mastodon toots into beautiful, shareable images.">
+    
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="TootPic - Mastodon Toot to Image Converter">
+    <meta property="twitter:description" content="Turn your Mastodon toots into beautiful, shareable images.">
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body class="bg-brand-gray-50 text-brand-gray-800 font-sans">
+    <div class="min-h-full flex items-center justify-center p-4 py-8 md:py-12">
+        <slot />
+    </div>
+</body>
+</html>
+<style is:global>
+    @import url('https://rsms.me/inter/inter.css');
+    html { 
+        font-family: 'Inter', sans-serif; 
+    }
+    
+    .preview-card {
+        background-color: #ffffff;
+        border-color: #e5e7eb; /* gray-200 */
+    }
+    .preview-card .text-primary { color: #111827; }
+    .preview-card .text-secondary { color: #6b7280; }
+    
+    .custom-emoji {
+        height: 1.25em;
+        width: 1.25em;
+        vertical-align: middle;
+        display: inline-block;
+    }
+    .content-container p {
+        margin-bottom: 1em;
+    }
+    .content-container p:last-child {
+        margin-bottom: 0;
+    }
+    .loader {
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #3b82f6;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .peer:checked + .toggle-bg {
+        background-color: #3b82f6;
+    }
+    .peer:checked + .toggle-bg:after {
+         transform: translateX(100%);
+         border-color: white;
+    }
+
+    .accordion-content {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.3s ease-out;
+    }
+    .accordion-content.expanded {
+        grid-template-rows: 1fr;
+    }
+</style>

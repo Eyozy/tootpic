@@ -1,0 +1,384 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+    <main class="w-full max-w-[670px] mx-auto flex flex-col items-center gap-5">
+        <!-- 1. Header -->
+        <header class="text-center w-full space-y-3 mb-1">
+            <div class="flex items-center justify-center gap-3 md:gap-4">
+                <img src="/favicon.svg" alt="TootPic Logo" class="w-10 h-10 md:w-12 md:h-12" />
+                <h1 class="text-4xl md:text-5xl font-bold text-brand-gray-900 tracking-tight">
+                    TootPic
+                </h1>
+            </div>
+            <p class="text-base md:text-lg text-brand-gray-600 max-w-xl mx-auto">
+                Turn your Mastodon toots into beautiful, shareable images.
+            </p>
+        </header>
+
+        <!-- 2. URL Input and Generate Button -->
+        <div class="w-full space-y-4">
+            <div class="w-full relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <svg class="w-5 h-5 text-brand-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <input type="url" id="mastodon-url" placeholder="https://mastodon.social/@user/123..." class="w-full pl-11 pr-4 py-3 border border-brand-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue bg-white shadow-sm transition">
+            </div>
+            <button id="generate-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed">
+                Generate Image
+            </button>
+            <div id="error-message" class="text-red-500 text-sm text-center min-h-[1.25rem]"></div>
+        </div>
+
+        <!-- 3. Accordion and Preview/Download Area -->
+        <div class="w-full space-y-5">
+            <!-- Accordion Control -->
+            <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
+                <button id="accordion-toggle" class="w-full flex items-center justify-between p-5">
+                    <h3 class="text-base font-semibold text-brand-gray-900">Customize</h3>
+                    <svg id="accordion-icon" class="w-5 h-5 text-brand-gray-500 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                <div id="accordion-content" class="accordion-content">
+                    <div class="overflow-hidden">
+                        <div class="px-5 pb-5 space-y-4 border-t border-brand-gray-100 pt-5">
+                             <div class="flex items-center justify-between">
+                                <label for="stats-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Stats</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="visibility" id="stats-toggle" value="stats" class="sr-only peer" checked>
+                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="timestamp-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Timestamp</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="visibility" id="timestamp-toggle" value="timestamp" class="sr-only peer" checked>
+                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="username-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Username</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="visibility" id="username-toggle" value="username" class="sr-only peer" checked>
+                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="original-post-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Use Original Post Data</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="use-original-post-data" class="sr-only peer" checked>
+                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview and Download Area (initially hidden) -->
+            <div id="preview-area" class="w-full flex-col items-center space-y-4 hidden">
+                <div id="image-container" class="w-full flex items-center justify-center preview-card border rounded-xl">
+                    <div id="loader" class="loader m-12"></div>
+                    <div id="style-a-container" class="p-8 w-full h-full hidden flex-col">
+                        <div class="flex items-center mb-4">
+                            <img id="style-a-avatar" class="w-12 h-12 rounded-lg mr-4" src="" alt="Avatar" crossorigin="anonymous">
+                            <div>
+                                <div id="style-a-display-name" class="font-bold text-primary text-base"></div>
+                                <div id="style-a-username" class="text-sm text-secondary"></div>
+                            </div>
+                        </div>
+                        <div id="style-a-content" class="text-primary text-base flex-grow content-container"></div>
+                        <div id="style-a-attachment" class="mt-3 rounded-lg overflow-hidden border bg-gray-100"></div>
+                        <div id="bottom-section" class="mt-4 pt-4 border-t">
+                            <div id="style-a-timestamp" class="text-sm text-secondary mb-3"></div>
+                            <div id="style-a-stats" class="flex items-center space-x-6 text-secondary text-sm">
+                                <span class="flex items-center"><svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg><span id="style-a-replies"></span></span>
+                                <span class="flex items-center"><svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg><span id="style-a-boosts"></span></span>
+                                <span class="flex items-center"><svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg><span id="style-a-favs"></span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                 <button id="download-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed" disabled>
+                     <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download Image (PNG)
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const CORS_PROXY = 'https://cors.eu.org/';
+        const CANONICAL_WIDTH = 670;
+
+        const urlInput = document.getElementById('mastodon-url');
+        const generateBtn = document.getElementById('generate-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const errorMessage = document.getElementById('error-message');
+        const previewArea = document.getElementById('preview-area');
+        const imageContainer = document.getElementById('image-container');
+        const loader = document.getElementById('loader');
+        const styleAContainer = document.getElementById('style-a-container');
+        const visibilityCheckboxes = document.querySelectorAll('input[name="visibility"]');
+        const useOriginalPostDataCheckbox = document.getElementById('use-original-post-data');
+        const accordionToggle = document.getElementById('accordion-toggle');
+        const accordionContent = document.getElementById('accordion-content');
+        const accordionIcon = document.getElementById('accordion-icon');
+
+        let postData = null;
+        let visibility = { stats: true, timestamp: true, username: true };
+
+        generateBtn.addEventListener('click', fetchMastodonPost);
+        downloadBtn.addEventListener('click', downloadImage);
+        accordionToggle.addEventListener('click', () => {
+            accordionContent.classList.toggle('expanded');
+            accordionIcon.classList.toggle('rotate-180');
+        });
+
+        const allCheckboxes = [...visibilityCheckboxes, useOriginalPostDataCheckbox];
+        allCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                visibilityCheckboxes.forEach(cb => { visibility[cb.value] = cb.checked; });
+                if (postData) { updatePreview(); }
+            });
+        });
+
+        function setPreviewState(state) {
+            loader.style.display = 'none';
+            styleAContainer.classList.add('hidden');
+            styleAContainer.classList.remove('flex', 'flex-col');
+
+            if (state === 'loading') {
+                loader.style.display = 'block';
+            } else if (state === 'content') {
+                styleAContainer.classList.remove('hidden');
+                styleAContainer.classList.add('flex', 'flex-col');
+            }
+        }
+
+        function setGenerateButtonState(isLoading) {
+            errorMessage.textContent = '';
+            generateBtn.disabled = isLoading;
+            generateBtn.textContent = isLoading ? 'Generating...' : 'Generate Image';
+        }
+        
+        function showError(message) {
+             errorMessage.textContent = message;
+             previewArea.classList.add('hidden');
+             downloadBtn.disabled = true;
+        }
+
+        async function fetchMastodonPost() {
+            const url = urlInput.value.trim();
+            if (!url) { showError('Please enter a URL.'); return; }
+
+            let match;
+            try {
+                const urlObject = new URL(url);
+                const pathParts = urlObject.pathname.split('/').filter(p => p);
+                if (pathParts.length >= 2 && pathParts[0].startsWith('@')) {
+                     match = { instance: urlObject.hostname, id: pathParts[1] };
+                } else {
+                     showError('Invalid URL format. Expected: https://instance/@user/id'); return;
+                }
+            } catch(e) { showError('Invalid URL format.'); return; }
+            
+            if (!match) { showError('Could not parse instance and post ID from URL.'); return; }
+
+            const { instance, id } = match;
+            const apiUrl = `${CORS_PROXY}https://${instance}/api/v1/statuses/${id}`;
+            
+            setGenerateButtonState(true);
+            previewArea.classList.remove('hidden');
+            previewArea.classList.add('flex');
+            setPreviewState('loading');
+
+            try {
+                const response = await fetch(apiUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!response.ok) {
+                    if (response.status === 404) throw new Error('Post not found. Check the URL and ensure the post is public.');
+                    throw new Error(`Network error: ${response.statusText}`);
+                }
+                postData = await response.json();
+                updatePreview();
+                downloadBtn.disabled = false;
+            } catch (error) {
+                showError(error.message);
+                postData = null;
+            } finally {
+                setGenerateButtonState(false);
+            }
+        }
+        
+        function updatePreview() {
+            if (!postData) return;
+            
+            const useOriginal = useOriginalPostDataCheckbox.checked;
+            const sourcePost = useOriginal && postData.reblog ? postData.reblog : postData;
+
+            let content = sourcePost.content;
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            tempDiv.querySelectorAll('a:not(.mention, .hashtag)').forEach(link => { link.textContent = link.getAttribute('href'); });
+            content = tempDiv.innerHTML;
+
+            if (sourcePost.emojis) {
+                sourcePost.emojis.forEach(emoji => {
+                    const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
+                    const proxiedUrl = `${CORS_PROXY}${emoji.url}`;
+                    content = content.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+                });
+            }
+
+            const date = new Date(sourcePost.created_at);
+            const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            
+            document.getElementById('style-a-avatar').src = `${CORS_PROXY}${sourcePost.account.avatar}`;
+            document.getElementById('style-a-display-name').innerHTML = sourcePost.account.display_name;
+            
+            const usernameEl = document.getElementById('style-a-username');
+            let fullAcct = sourcePost.account.acct;
+            if (!fullAcct.includes('@')) {
+                try {
+                    const userProfileUrl = new URL(sourcePost.account.url);
+                    fullAcct = `${fullAcct}@${userProfileUrl.hostname}`;
+                } catch(e) {}
+            }
+            usernameEl.textContent = `@${fullAcct}`;
+            usernameEl.style.display = visibility.username ? 'block' : 'none';
+
+            document.getElementById('style-a-content').innerHTML = content;
+            
+            const attachmentContainer = document.getElementById('style-a-attachment');
+            attachmentContainer.innerHTML = '';
+            
+            const imageAttachments = sourcePost.media_attachments.filter(att => att.type === 'image');
+            
+            const onAllImagesLoaded = () => { setPreviewState('content'); };
+
+            if (imageAttachments.length > 0) {
+                attachmentContainer.style.display = 'grid';
+                attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100 grid gap-px';
+                const imagesToDisplay = imageAttachments.slice(0, 4);
+                if (imagesToDisplay.length === 2 || imagesToDisplay.length === 4) attachmentContainer.classList.add('grid-cols-2');
+                if (imagesToDisplay.length === 3) attachmentContainer.classList.add('grid-cols-2', 'grid-rows-2');
+                
+                let imagesLoaded = 0;
+                imagesToDisplay.forEach((att, index) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'overflow-hidden';
+                    if (imagesToDisplay.length === 3 && index === 0) wrapper.classList.add('row-span-2');
+                    
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.src = `${CORS_PROXY}${att.url}`;
+                    img.alt = att.description || `Attachment ${index + 1}`;
+                    img.className = 'w-full h-full object-cover';
+                    img.onload = () => { imagesLoaded++; if (imagesLoaded === imagesToDisplay.length) { onAllImagesLoaded(); } };
+                    img.onerror = () => { imagesLoaded++; if (imagesLoaded === imagesToDisplay.length) { onAllImagesLoaded(); } };
+                    wrapper.appendChild(img);
+                    attachmentContainer.appendChild(wrapper);
+                });
+            } else {
+                attachmentContainer.style.display = 'none';
+                onAllImagesLoaded();
+            }
+
+            const timestampEl = document.getElementById('style-a-timestamp');
+            const statsEl = document.getElementById('style-a-stats');
+            const bottomSection = document.getElementById('bottom-section');
+
+            const showTimestamp = visibility.timestamp;
+            const showStats = visibility.stats;
+
+            timestampEl.textContent = `${formattedTime} · ${formattedDate}`;
+            timestampEl.style.display = showTimestamp ? 'block' : 'none';
+            statsEl.style.display = showStats ? 'flex' : 'none';
+            bottomSection.style.display = showTimestamp || showStats ? 'block' : 'none';
+
+            document.getElementById('style-a-replies').textContent = sourcePost.replies_count;
+            document.getElementById('style-a-boosts').textContent = sourcePost.reblogs_count;
+            document.getElementById('style-a-favs').textContent = sourcePost.favourites_count;
+        }
+
+        async function downloadImage() {
+            const node = document.getElementById('image-container');
+            if (!node || !postData) return;
+
+            const originalBtnHTML = downloadBtn.innerHTML;
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = 'Generating...';
+
+            // Create an off-screen clone for high-resolution capture
+            const clone = node.cloneNode(true);
+            clone.style.position = 'absolute';
+            clone.style.left = '-9999px';
+            clone.style.top = '0px';
+            clone.style.width = `${CANONICAL_WIDTH}px`;
+            clone.style.height = 'auto'; // Important for adaptive height
+            clone.classList.remove('rounded-xl', 'border'); // Unstyle the clone
+            document.body.appendChild(clone);
+            
+            // Helper function to convert a URL to a dataURL
+            const toDataURL = async (url) => {
+                try {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (e) {
+                    console.error(`Failed to fetch image: ${url}`, e);
+                    return 'about:blank'; // Return a blank image on failure
+                }
+            };
+
+            try {
+                // Find all unique image URLs in the clone
+                const images = Array.from(clone.querySelectorAll('img'));
+                const urls = [...new Set(images.map(img => img.src))];
+
+                // Fetch all images and convert them to dataURLs
+                const dataURLs = await Promise.all(urls.map(url => toDataURL(url)));
+
+                // Create a cache map: { original_url: data_url, ... }
+                const cache = urls.reduce((acc, url, index) => {
+                    acc.set(url, dataURLs[index]);
+                    return acc;
+                }, new Map());
+
+                // Generate the image using the pre-filled cache
+                const dataUrl = await htmlToImage.toPng(clone, { 
+                    quality: 1,
+                    pixelRatio: 2,
+                    cache: cache
+                });
+
+                // Trigger download
+                const link = document.createElement('a');
+                link.download = `tootpic-${postData.id}.png`;
+                link.href = dataUrl;
+                link.click();
+            } catch (error) {
+                console.error('Oops, something went wrong!', error);
+                showError('Image generation failed, please try again.');
+            } finally {
+                // Clean up by removing the clone and restoring the button
+                document.body.removeChild(clone);
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = originalBtnHTML;
+            }
+        }
+    });
+    </script>
+</Layout>
