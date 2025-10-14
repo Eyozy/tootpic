@@ -114,26 +114,28 @@ import Layout from '../layouts/Layout.astro';
     </main>
 
     <script>
+    declare var htmlToImage: any;
+
     document.addEventListener('DOMContentLoaded', () => {
         // DOM Elements
-        const urlInput = document.getElementById('mastodon-url');
-        const generateBtn = document.getElementById('generate-btn');
-        const downloadBtn = document.getElementById('download-btn');
-        const errorMessage = document.getElementById('error-message');
-        const previewArea = document.getElementById('preview-area');
-        const imageContainer = document.getElementById('image-container');
-        const loader = document.getElementById('loader');
-        const styleAContainer = document.getElementById('style-a-container');
+        const urlInput = document.getElementById('mastodon-url') as HTMLInputElement | null;
+        const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement | null;
+        const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement | null;
+        const errorMessage = document.getElementById('error-message') as HTMLDivElement | null;
+        const previewArea = document.getElementById('preview-area') as HTMLDivElement | null;
+        const imageContainer = document.getElementById('image-container') as HTMLDivElement | null;
+        const loader = document.getElementById('loader') as HTMLDivElement | null;
+        const styleAContainer = document.getElementById('style-a-container') as HTMLDivElement | null;
         
-        const visibilityCheckboxes = document.querySelectorAll('input[name="visibility"]');
-        const useOriginalPostDataCheckbox = document.getElementById('use-original-post-data');
+        const visibilityCheckboxes = document.querySelectorAll<HTMLInputElement>('input[name="visibility"]');
+        const useOriginalPostDataCheckbox = document.getElementById('use-original-post-data') as HTMLInputElement | null;
 
-        const accordionToggle = document.getElementById('accordion-toggle');
-        const accordionContent = document.getElementById('accordion-content');
-        const accordionIcon = document.getElementById('accordion-icon');
+        const accordionToggle = document.getElementById('accordion-toggle') as HTMLButtonElement | null;
+        const accordionContent = document.getElementById('accordion-content') as HTMLDivElement | null;
+        const accordionIcon = document.getElementById('accordion-icon') as SVGElement | null;
 
         // State
-        let postData = null;
+        let postData: any = null; // Consider defining a proper type for postData
         let visibility = {
             stats: true,
             timestamp: true,
@@ -141,19 +143,21 @@ import Layout from '../layouts/Layout.astro';
         };
 
         // --- Event Listeners ---
-        generateBtn.addEventListener('click', fetchMastodonPost);
-        downloadBtn.addEventListener('click', downloadImage);
+        generateBtn?.addEventListener('click', fetchMastodonPost);
+        downloadBtn?.addEventListener('click', downloadImage);
 
-        accordionToggle.addEventListener('click', () => {
-            accordionIcon.classList.toggle('rotate-180');
-            accordionContent.classList.toggle('expanded');
+        accordionToggle?.addEventListener('click', () => {
+            accordionIcon?.classList.toggle('rotate-180');
+            accordionContent?.classList.toggle('expanded');
         });
 
-        const allCheckboxes = [...visibilityCheckboxes, useOriginalPostDataCheckbox];
+        const allCheckboxes = [...visibilityCheckboxes, useOriginalPostDataCheckbox].filter(cb => cb !== null) as HTMLInputElement[];
         allCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
                 visibilityCheckboxes.forEach(cb => {
-                    visibility[cb.value] = cb.checked;
+                    if (cb && cb.value) {
+                        visibility[cb.value as keyof typeof visibility] = cb.checked;
+                    }
                 });
                 if (postData) {
                     updatePreview();
@@ -164,35 +168,36 @@ import Layout from '../layouts/Layout.astro';
 
         // --- Functions ---
 
-        function setPreviewState(state) {
-            loader.classList.add('hidden');
-            styleAContainer.classList.add('hidden');
+        function setPreviewState(state: 'loading' | 'content') {
+            loader?.classList.add('hidden');
+            styleAContainer?.classList.add('hidden');
             
             if (state === 'loading') {
-                loader.classList.remove('hidden');
+                loader?.classList.remove('hidden');
             } else if (state === 'content') {
-                styleAContainer.classList.remove('hidden');
+                styleAContainer?.classList.remove('hidden');
             }
         }
 
-        function setGenerateButtonState(isLoading) {
-            if (isLoading) {
-                errorMessage.textContent = '';
+        function setGenerateButtonState(isLoading: boolean) {
+            if (isLoading && generateBtn) {
+                errorMessage!.textContent = '';
                 generateBtn.disabled = true;
                 generateBtn.textContent = 'Fetching...';
-            } else {
+            } else if (generateBtn) {
                 generateBtn.disabled = false;
                 generateBtn.textContent = 'Generate Image';
             }
         }
         
-        function showError(message) {
-             errorMessage.textContent = message;
-             previewArea.classList.add('hidden');
-             downloadBtn.disabled = true;
+        function showError(message: string) {
+            if (errorMessage) errorMessage.textContent = message;
+            if (previewArea) previewArea.classList.add('hidden');
+            if (downloadBtn) downloadBtn.disabled = true;
         }
 
         async function fetchMastodonPost() {
+            if (!urlInput) return;
             const url = urlInput.value.trim();
             if (!url) {
                 showError('Please enter a URL.');
@@ -222,7 +227,7 @@ import Layout from '../layouts/Layout.astro';
             const { instance, id } = match;
             const apiUrl = `https://cors.eu.org/https://${instance}/api/v1/statuses/${id}`;
             
-            previewArea.classList.remove('hidden');
+            if (previewArea) previewArea.classList.remove('hidden');
             setGenerateButtonState(true);
             setPreviewState('loading');
 
@@ -234,9 +239,9 @@ import Layout from '../layouts/Layout.astro';
                 }
                 postData = await response.json();
                 updatePreview();
-                downloadBtn.disabled = false;
+                if (downloadBtn) downloadBtn.disabled = false;
             } catch (error) {
-                showError(error.message);
+                showError(error instanceof Error ? error.message : 'An unknown error occurred');
                 postData = null;
             } finally {
                 setGenerateButtonState(false);
@@ -244,7 +249,7 @@ import Layout from '../layouts/Layout.astro';
         }
         
         function updatePreview() {
-            if (!postData) return;
+            if (!postData || !useOriginalPostDataCheckbox) return;
             
             const useOriginal = useOriginalPostDataCheckbox.checked;
             const sourcePost = useOriginal && postData.reblog ? postData.reblog : postData;
@@ -273,91 +278,111 @@ import Layout from '../layouts/Layout.astro';
             const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             
-            document.getElementById('style-a-avatar').src = sourcePost.account.avatar;
-            document.getElementById('style-a-display-name').innerHTML = sourcePost.account.display_name;
+            const avatarEl = document.getElementById('style-a-avatar') as HTMLImageElement | null;
+            if (avatarEl) avatarEl.src = sourcePost.account.avatar;
             
-            const usernameEl = document.getElementById('style-a-username');
-            let fullAcct = sourcePost.account.acct;
-            if (!fullAcct.includes('@')) {
-                try {
-                    const userProfileUrl = new URL(sourcePost.account.url);
-                    fullAcct = `${fullAcct}@${userProfileUrl.hostname}`;
-                } catch(e) { /* Do nothing, use acct as is */ }
-            }
-            usernameEl.textContent = `@${fullAcct}`;
-            usernameEl.style.display = visibility.username ? 'block' : 'none';
-
-            document.getElementById('style-a-content').innerHTML = content;
+            const displayNameEl = document.getElementById('style-a-display-name') as HTMLDivElement | null;
+            if (displayNameEl) displayNameEl.innerHTML = sourcePost.account.display_name;
             
-            const attachmentContainer = document.getElementById('style-a-attachment');
-            attachmentContainer.innerHTML = '';
-            attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100';
-
-            const imageAttachments = sourcePost.media_attachments.filter(att => att.type === 'image');
-
-            if (imageAttachments.length > 0) {
-                attachmentContainer.style.display = 'grid';
-                attachmentContainer.classList.add('gap-px');
-                const imagesToDisplay = imageAttachments.slice(0, 4);
-
-                switch (imagesToDisplay.length) {
-                    case 1: attachmentContainer.style.gridTemplateColumns = '1fr'; break;
-                    case 2: attachmentContainer.style.gridTemplateColumns = '1fr 1fr'; break;
-                    case 3: 
-                        attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
-                        attachmentContainer.style.gridTemplateRows = '1fr 1fr';
-                        break;
-                    case 4: 
-                        attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
-                        attachmentContainer.style.gridTemplateRows = '1fr 1fr';
-                        break;
+            const usernameEl = document.getElementById('style-a-username') as HTMLDivElement | null;
+            if (usernameEl) {
+                let fullAcct = sourcePost.account.acct;
+                if (!fullAcct.includes('@')) {
+                    try {
+                        const userProfileUrl = new URL(sourcePost.account.url);
+                        fullAcct = `${fullAcct}@${userProfileUrl.hostname}`;
+                    } catch(e) { /* Do nothing, use acct as is */ }
                 }
+                usernameEl.textContent = `@${fullAcct}`;
+                usernameEl.style.display = visibility.username ? 'block' : 'none';
+            }
 
-                imagesToDisplay.forEach((attachment, index) => {
-                    const imgWrapper = document.createElement('div');
-                    imgWrapper.className = 'overflow-hidden';
-                    const img = document.createElement('img');
-                    img.crossOrigin = 'anonymous';
-                    img.src = attachment.url;
-                    img.alt = attachment.description || `Post attachment ${index + 1}`;
-                    img.className = 'w-full h-full object-cover';
-                    if (imagesToDisplay.length === 3 && index === 0) {
-                        imgWrapper.style.gridRow = 'span 2 / span 2';
+            const contentEl = document.getElementById('style-a-content') as HTMLDivElement | null;
+            if (contentEl) contentEl.innerHTML = content;
+            
+            const attachmentContainer = document.getElementById('style-a-attachment') as HTMLDivElement | null;
+            if (attachmentContainer) {
+                attachmentContainer.innerHTML = '';
+                attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100';
+
+                const imageAttachments = sourcePost.media_attachments.filter((att: any) => att.type === 'image');
+
+                if (imageAttachments.length > 0) {
+                    attachmentContainer.style.display = 'grid';
+                    attachmentContainer.classList.add('gap-px');
+                    const imagesToDisplay = imageAttachments.slice(0, 4);
+
+                    switch (imagesToDisplay.length) {
+                        case 1: attachmentContainer.style.gridTemplateColumns = '1fr'; break;
+                        case 2: attachmentContainer.style.gridTemplateColumns = '1fr 1fr'; break;
+                        case 3: 
+                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
+                            attachmentContainer.style.gridTemplateRows = '1fr 1fr';
+                            break;
+                        case 4: 
+                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
+                            attachmentContainer.style.gridTemplateRows = '1fr 1fr';
+                            break;
                     }
-                    imgWrapper.appendChild(img);
-                    attachmentContainer.appendChild(imgWrapper);
-                });
-            } else {
-                attachmentContainer.style.display = 'none';
+
+                    imagesToDisplay.forEach((attachment: any, index: number) => {
+                        const imgWrapper = document.createElement('div');
+                        imgWrapper.className = 'overflow-hidden';
+                        const img = document.createElement('img');
+                        img.crossOrigin = 'anonymous';
+                        img.src = attachment.url;
+                        img.alt = attachment.description || `Post attachment ${index + 1}`;
+                        img.className = 'w-full h-full object-cover';
+                        if (imagesToDisplay.length === 3 && index === 0) {
+                            imgWrapper.style.gridRow = 'span 2 / span 2';
+                        }
+                        imgWrapper.appendChild(img);
+                        attachmentContainer.appendChild(imgWrapper);
+                    });
+                } else {
+                    attachmentContainer.style.display = 'none';
+                }
             }
             
-            const bottomSection = document.getElementById('bottom-section');
-            const timestampEl = document.getElementById('style-a-timestamp');
-            const statsEl = document.getElementById('style-a-stats');
+            const bottomSection = document.getElementById('bottom-section') as HTMLDivElement | null;
+            const timestampEl = document.getElementById('style-a-timestamp') as HTMLDivElement | null;
+            const statsEl = document.getElementById('style-a-stats') as HTMLDivElement | null;
             
-            timestampEl.textContent = `${formattedTime} · ${formattedDate}`;
-            timestampEl.style.display = visibility.timestamp ? 'block' : 'none';
+            if (timestampEl) {
+                timestampEl.textContent = `${formattedTime} · ${formattedDate}`;
+                timestampEl.style.display = visibility.timestamp ? 'block' : 'none';
+            }
 
-            document.getElementById('style-a-replies').textContent = sourcePost.replies_count;
-            document.getElementById('style-a-boosts').textContent = sourcePost.reblogs_count;
-            document.getElementById('style-a-favs').textContent = sourcePost.favourites_count;
-            statsEl.style.display = visibility.stats ? 'flex' : 'none';
+            const repliesEl = document.getElementById('style-a-replies') as HTMLSpanElement | null;
+            const boostsEl = document.getElementById('style-a-boosts') as HTMLSpanElement | null;
+            const favsEl = document.getElementById('style-a-favs') as HTMLSpanElement | null;
+
+            if (repliesEl) repliesEl.textContent = sourcePost.replies_count;
+            if (boostsEl) boostsEl.textContent = sourcePost.reblogs_count;
+            if (favsEl) favsEl.textContent = sourcePost.favourites_count;
+            
+            if (statsEl) {
+                statsEl.style.display = visibility.stats ? 'flex' : 'none';
+            }
             
             const shouldShowBottomSection = visibility.timestamp || visibility.stats;
-            bottomSection.style.display = shouldShowBottomSection ? 'block' : 'none';
-            bottomSection.style.borderTopWidth = shouldShowBottomSection ? '1px' : '0';
+            if (bottomSection) {
+                bottomSection.style.display = shouldShowBottomSection ? 'block' : 'none';
+                bottomSection.style.borderTopWidth = shouldShowBottomSection ? '1px' : '0';
+            }
 
             setPreviewState('content');
         }
 
         async function downloadImage() {
-            const originalNode = document.getElementById('style-a-container');
+            const originalNode = document.getElementById('style-a-container') as HTMLDivElement | null;
             if (!originalNode || !postData) return;
 
+            if (!downloadBtn) return;
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Preparing...';
 
-            const clone = originalNode.cloneNode(true);
+            const clone = originalNode.cloneNode(true) as HTMLDivElement;
             
             // Remove preview-specific classes
             clone.classList.remove('preview-card', 'border', 'rounded-xl');
@@ -377,12 +402,14 @@ import Layout from '../layouts/Layout.astro';
 
             try {
                 downloadBtn.textContent = 'Generating...';
+                if (typeof htmlToImage === 'undefined') {
+                    throw new Error('htmlToImage library not loaded.');
+                }
 
                 const dataUrl = await htmlToImage.toPng(clone, { 
                     quality: 1,
                     pixelRatio: 2,
                     cacheBust: true,
-                    // --- THE FIX IS HERE ---
                     backgroundColor: '#ffffff' // Explicitly set background to solid white
                 });
 
@@ -396,13 +423,17 @@ import Layout from '../layouts/Layout.astro';
                 showError('Image generation failed. Please try again.');
             } finally {
                 // Clean up
-                document.body.removeChild(tempContainer);
+                if (document.body.contains(tempContainer)) {
+                    document.body.removeChild(tempContainer);
+                }
                 
-                downloadBtn.disabled = false;
-                downloadBtn.innerHTML = `
-                    <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download Image (PNG)
-                `;
+                if (downloadBtn) {
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = `
+                        <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download Image (PNG)
+                    `;
+                }
             }
         }
     });
