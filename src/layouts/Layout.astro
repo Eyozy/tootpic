@@ -24,6 +24,21 @@
     <div class="min-h-full flex items-center justify-center p-4 py-8 md:py-12">
         <slot />
     </div>
+    
+    <footer class="fixed bottom-0 w-full flex justify-center items-center py-4 text-gray-600">
+        <span class="no-underline">
+            &copy; 2025 | Reserved by Eyozy | 
+            <a 
+                href="https://github.com/Eyozy/tootpic" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="relative group no-underline hover:text-gray-800 transition-colors duration-200"
+            >
+                Source Code
+                <span class="absolute bottom-0 left-0 w-0 h-px bg-gray-800 transition-all duration-300 group-hover:w-full"></span>
+            </a>
+        </span>
+    </footer>
 </body>
 </html>
 <style is:global>
