@@ -107,7 +107,7 @@ import Layout from '../layouts/Layout.astro';
                 </div>
                  <button id="download-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed" disabled>
                      <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download Image (PNG)
+                    Download High-Res Image (PNG)
                 </button>
             </div>
         </div>
@@ -408,9 +408,13 @@ import Layout from '../layouts/Layout.astro';
 
                 const dataUrl = await htmlToImage.toPng(clone, { 
                     quality: 1,
-                    pixelRatio: 2,
+                    pixelRatio: 3, // 提高像素比以获得更高分辨率的图片
                     cacheBust: true,
-                    backgroundColor: '#ffffff' // Explicitly set background to solid white
+                    backgroundColor: '#ffffff', // Explicitly set background to solid white
+                    style: {
+                        transform: 'scale(1)', // 确保没有缩放
+                        transformOrigin: 'top left'
+                    }
                 });
 
                 const link = document.createElement('a');
@@ -431,7 +435,7 @@ import Layout from '../layouts/Layout.astro';
                     downloadBtn.disabled = false;
                     downloadBtn.innerHTML = `
                         <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Image (PNG)
+                        Download High-Res Image (PNG)
                     `;
                 }
             }
