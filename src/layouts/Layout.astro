@@ -1,31 +1,89 @@
 <!DOCTYPE html>
-<html lang="en" style="height: 100%;">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, height=device-height, viewport-fit=cover">
     <title>TootPic - Mastodon Toot to Image Converter</title>
     
-    <meta name="description" content="Turn your Mastodon toots into beautiful, shareable images. Instantly generate a clean screenshot for your social media campaigns.">
-    <meta name="keywords" content="Mastodon, image generator, toot to image, screenshot, social media">
-    
+    <meta name="description" content="Convert Mastodon posts into beautiful, shareable images. Generate high-quality screenshots with one click, perfect for social media sharing. Supports custom styles and multiple resolutions.">
+    <meta name="keywords" content="Mastodon, image generator, post to image, screenshot tool, social media, content creator, marketing tool">
+
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="TootPic - Mastodon Toot to Image Converter">
-    <meta property="og:description" content="Turn your Mastodon toots into beautiful, shareable images.">
-    
+    <meta property="og:url" content="https://tootpic.vercel.app/">
+    <meta property="og:title" content="TootPic - Mastodon Post to Image Converter">
+    <meta property="og:description" content="Convert Mastodon posts into beautiful, shareable images. Generate high-quality screenshots with one click, perfect for social media sharing.">
+    <meta property="og:image" content="">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter Card -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:title" content="TootPic - Mastodon Toot to Image Converter">
-    <meta property="twitter:description" content="Turn your Mastodon toots into beautiful, shareable images.">
+    <meta property="twitter:url" content="https://tootpic.app/">
+    <meta property="twitter:title" content="TootPic - Mastodon Post to Image Converter">
+    <meta property="twitter:description" content="Convert Mastodon posts into beautiful, shareable images. Generate high-quality screenshots with one click, perfect for social media sharing.">
+    <meta property="twitter:image" content="">
+
+    <!-- Additional SEO -->
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Eyozy">
+    <meta name="language" content="en-US">
+    <link rel="canonical" href="https://tootpic.vercel.app/">
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://cors.eu.org">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+    <!-- Resource hints -->
+    <link rel="dns-prefetch" href="https://rsms.me">
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="preload" href="https://rsms.me/inter/inter.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://rsms.me/inter/inter.css"></noscript>
+    <link rel="preload" href="/favicon.svg" as="image" type="image/svg+xml">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"
+            integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+            defer></script>
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="35fb3e3e-c37a-4e46-88d1-672287a6c48b"></script>
+
+        <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "TootPic",
+        "description": "Convert Mastodon posts into beautiful, shareable images",
+        "url": "https://tootpic.vercel.app/",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "creator": {
+            "@type": "Person",
+            "name": "Eyozy"
+        },
+        "featureList": [
+            "Mastodon post conversion",
+            "High-quality image generation",
+            "Custom styles",
+            "Social media sharing",
+            "Responsive design"
+        ]
+    }
+    </script>
 </head>
 <body class="bg-brand-gray-50 text-brand-gray-800 font-sans flex flex-col min-h-screen">
     <div class="flex-grow flex items-center justify-center p-4 py-8 md:py-12">
         <slot />
     </div>
     
-    <footer class="w-full flex justify-center items-center py-4 text-gray-600">
+    <footer class="w-full flex justify-center items-center py-4 text-gray-600 flex-shrink-0">
         <span class="no-nowrap text-xs sm:text-sm md:text-base">
             &copy; 2025 | Reserved by Eyozy | 
             <a 
@@ -42,14 +100,36 @@
 </body>
 </html>
 <style is:global>
-    @import url('https://rsms.me/inter/inter.css');
-    html { 
-        font-family: 'Inter', sans-serif; 
+    html {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        min-height: 100dvh;
+        min-height: 100vh;
+        text-rendering: optimizeSpeed;
+        line-height: 1.5;
+    }
+
+        @supports (height: 100dvh) {
+        html {
+            min-height: 100dvh;
+        }
+        body {
+            min-height: 100dvh;
+        }
+    }
+
+        body {
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+        main {
+        overflow-x: hidden;
     }
     
     .preview-card {
         background-color: #ffffff;
-        border-color: #e5e7eb; /* gray-200 */
+        border-color: #e5e7eb;
     }
     .preview-card .text-primary { color: #111827; }
     .preview-card .text-secondary { color: #6b7280; }
@@ -94,5 +174,56 @@
     }
     .accordion-content.expanded {
         grid-template-rows: 1fr;
+    }
+
+        .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+        * {
+        box-sizing: border-box;
+    }
+
+        @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+
+        img {
+        max-width: 100%;
+        height: auto;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+
+        @media (prefers-contrast: high) {
+        .preview-card {
+            border-width: 2px;
+        }
+    }
+
+        @media print {
+        body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .no-print {
+            display: none !important;
+        }
     }
 </style>
