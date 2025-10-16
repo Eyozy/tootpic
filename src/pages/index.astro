@@ -124,8 +124,6 @@ import Layout from '../layouts/Layout.astro';
     declare var htmlToImage: any;
 
     document.addEventListener('DOMContentLoaded', () => {
-        document.body.classList.add('no-scroll');
-
         const urlInput = document.getElementById('mastodon-url') as HTMLInputElement | null;
         const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement | null;
         const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement | null;
@@ -199,6 +197,7 @@ import Layout from '../layouts/Layout.astro';
             if (errorMessage) errorMessage.textContent = message;
             if (previewArea) previewArea.classList.add('hidden');
             if (downloadBtn) downloadBtn.disabled = true;
+            document.body.classList.remove('is-content-active');
         }
 
         async function fetchMastodonPost() {
@@ -243,7 +242,7 @@ import Layout from '../layouts/Layout.astro';
                     throw new Error(`Network error: ${response.statusText}`);
                 }
                 postData = await response.json();
-                document.body.classList.remove('no-scroll');
+                document.body.classList.add('is-content-active');
                 updatePreview();
                 if (downloadBtn) downloadBtn.disabled = false;
             } catch (error) {

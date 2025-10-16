@@ -78,7 +78,7 @@
     }
     </script>
 </head>
-<body class="bg-brand-gray-50 text-brand-gray-800 font-sans flex flex-col min-h-screen">
+<body class="bg-brand-gray-50 text-brand-gray-800 font-sans flex flex-col">
     <div class="flex-grow flex items-center justify-center p-4 py-8 md:py-12">
         <slot />
     </div>
@@ -102,25 +102,27 @@
 <style is:global>
     html {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        min-height: 100dvh;
         text-rendering: optimizeSpeed;
         line-height: 1.5;
+        margin: 0;
+        padding: 0;
     }
 
-    @supports (height: 100dvh) {
-        html, body {
-            min-height: 100dvh;
-        }
+    /* Initial state: fixed height, no scroll */
+    html, body {
+        height: 100dvh;
+        overflow: hidden;
     }
 
     body {
-        overflow-x: hidden;
-        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
 
-    body.no-scroll {
-        overflow-y: hidden;
+    /* Active state: allows scrolling when content is loaded */
+    body.is-content-active {
+        height: auto;
+        min-height: 100dvh;
+        overflow-y: auto;
     }
 
         main {
