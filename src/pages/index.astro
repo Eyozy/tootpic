@@ -272,10 +272,13 @@ import Layout from '../layouts/Layout.astro';
             });
             content = tempDiv.innerHTML;
 
+            const corsProxy = 'https://cors.eu.org/';
+
             if (sourcePost.emojis) {
                 sourcePost.emojis.forEach(emoji => {
                     const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
-                    content = content.replace(regex, `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+                    const proxiedUrl = `${corsProxy}${emoji.url}`;
+                    content = content.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
                 });
             }
 
@@ -284,7 +287,7 @@ import Layout from '../layouts/Layout.astro';
             const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             
             const avatarEl = document.getElementById('style-a-avatar') as HTMLImageElement | null;
-            if (avatarEl) avatarEl.src = sourcePost.account.avatar;
+            if (avatarEl) avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
             
             const displayNameEl = document.getElementById('style-a-display-name') as HTMLDivElement | null;
             if (displayNameEl) displayNameEl.innerHTML = sourcePost.account.display_name;
@@ -310,16 +313,26 @@ import Layout from '../layouts/Layout.astro';
                 attachmentContainer.innerHTML = '';
                 attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100';
 
-                const imageAttachments = sourcePost.media_attachments.filter((att: any) => att.type === 'image');
-
-                if (imageAttachments.length > 0) {
+                // 处理所有媒体附件，包括图片、GIF和视频
+                const mediaAttachments = sourcePost.media_attachments;
+                
+                if (mediaAttachments.length > 0) {
                     attachmentContainer.style.display = 'grid';
                     attachmentContainer.classList.add('gap-px');
-                    const imagesToDisplay = imageAttachments.slice(0, 4);
-
-                    switch (imagesToDisplay.length) {
-                        case 1: attachmentContainer.style.gridTemplateColumns = '1fr'; break;
-                        case 2: attachmentContainer.style.gridTemplateColumns = '1fr 1fr'; break;
+                    
+                    // 限制最多显示4个附件
+                    const attachmentsToDisplay = mediaAttachments.slice(0, 4);
+                    
+                    // 计算网格布局
+                    switch (attachmentsToDisplay.length) {
+                        case 1: 
+                            attachmentContainer.style.gridTemplateColumns = '1fr'; 
+                            attachmentContainer.style.gridTemplateRows = '1fr';
+                            break;
+                        case 2: 
+                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr'; 
+                            attachmentContainer.style.gridTemplateRows = '1fr';
+                            break;
                         case 3: 
                             attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
                             attachmentContainer.style.gridTemplateRows = '1fr 1fr';
@@ -330,18 +343,48 @@ import Layout from '../layouts/Layout.astro';
                             break;
                     }
 
-                    imagesToDisplay.forEach((attachment: any, index: number) => {
+                    attachmentsToDisplay.forEach((attachment: any, index: number) => {
                         const imgWrapper = document.createElement('div');
-                        imgWrapper.className = 'overflow-hidden';
+                        imgWrapper.className = 'overflow-hidden relative';
+                        
                         const img = document.createElement('img');
                         img.crossOrigin = 'anonymous';
-                        img.src = attachment.url;
                         img.alt = attachment.description || `Post attachment ${index + 1}`;
                         img.className = 'w-full h-full object-cover';
-                        if (imagesToDisplay.length === 3 && index === 0) {
+
+                        if (attachment.type === 'image') {
+                            img.src = `${corsProxy}${attachment.url}`;
+                        } else {
+                            // For GIFs and videos, use the preview URL for the static image
+                            const imageUrl = attachment.preview_url || attachment.url;
+                            img.src = `${corsProxy}${imageUrl}`;
+                        }
+                        
+                        imgWrapper.appendChild(img);
+
+                        // Add indicators for GIF and Video
+                        if (attachment.type === 'gifv') {
+                            const gifIndicator = document.createElement('div');
+                            gifIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded';
+                            gifIndicator.textContent = 'GIF';
+                            imgWrapper.appendChild(gifIndicator);
+                        } else if (attachment.type === 'video') {
+                            const videoIndicator = document.createElement('div');
+                            videoIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center';
+                            videoIndicator.innerHTML = `
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/>
+                                </svg>
+                                Video
+                            `;
+                            imgWrapper.appendChild(videoIndicator);
+                        }
+                        
+                        // 特殊处理3个附件的情况
+                        if (attachmentsToDisplay.length === 3 && index === 0) {
                             imgWrapper.style.gridRow = 'span 2 / span 2';
                         }
-                        imgWrapper.appendChild(img);
+                        
                         attachmentContainer.appendChild(imgWrapper);
                     });
                 } else {
