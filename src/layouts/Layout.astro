@@ -43,11 +43,6 @@
     <link rel="preload" href="https://rsms.me/inter/inter.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://rsms.me/inter/inter.css"></noscript>
     <link rel="preload" href="/favicon.svg" as="image" type="image/svg+xml">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"
-            integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw=="
-            crossorigin="anonymous"
-            referrerpolicy="no-referrer"
-            defer></script>
     <script defer src="https://cloud.umami.is/script.js" data-website-id="35fb3e3e-c37a-4e46-88d1-672287a6c48b"></script>
 
         <script type="application/ld+json">
@@ -148,6 +143,14 @@
     .content-container p:last-child {
         margin-bottom: 0;
     }
+
+    .content-container a.mention,
+    .content-container a.hashtag,
+    .content-container a.url {
+        color: #3b82f6; /* Tailwind's blue-500 */
+        text-decoration: none;
+    }
+
     .loader {
         border: 4px solid #f3f4f6;
         border-top: 4px solid #3b82f6;

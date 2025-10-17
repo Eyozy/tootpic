@@ -24,7 +24,7 @@ import Layout from '../layouts/Layout.astro';
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                     </svg>
                 </div>
-                <input type="url" name="mastodon-url" id="mastodon-url" placeholder="https://mastodon.social/@user/123..." class="w-full pl-12 pr-5 py-3 border border-brand-gray-300 rounded-lg bg-white shadow-sm transition focus:outline-none focus:ring-0 focus:border-brand-blue" autocomplete="url" aria-describedby="url-help" aria-required="true">
+                <input type="url" name="mastodon-url" id="mastodon-url" placeholder="https://mastodon.social/@user/123..." class="w-full pl-12 pr-5 py-3 border border-brand-gray-300 rounded-lg bg-white shadow-sm transition focus:outline-none focus:ring-0 focus:border-brand-blue" autocomplete="url" aria-required="true">
             </div>
             <button id="generate-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed">
                 Generate Image
@@ -129,7 +129,6 @@ import Layout from '../layouts/Layout.astro';
         const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement | null;
         const errorMessage = document.getElementById('error-message') as HTMLDivElement | null;
         const previewArea = document.getElementById('preview-area') as HTMLDivElement | null;
-        const imageContainer = document.getElementById('image-container') as HTMLDivElement | null;
         const loader = document.getElementById('loader') as HTMLDivElement | null;
         const styleAContainer = document.getElementById('style-a-container') as HTMLDivElement | null;
         
@@ -265,9 +264,8 @@ import Layout from '../layouts/Layout.astro';
             tempDiv.innerHTML = content;
             const links = tempDiv.querySelectorAll('a');
             links.forEach(link => {
-                const isMentionOrHashtag = link.classList.contains('mention') || link.classList.contains('hashtag');
-                if (!isMentionOrHashtag) {
-                    link.textContent = link.getAttribute('href');
+                if (!link.classList.contains('mention') && !link.classList.contains('hashtag')) {
+                    link.classList.add('url');
                 }
             });
             content = tempDiv.innerHTML;
@@ -491,6 +489,12 @@ import Layout from '../layouts/Layout.astro';
         const urlInput = document.getElementById('mastodon-url') as HTMLInputElement | null;
     urlInput?.addEventListener('focus', () => {
         if (typeof htmlToImage === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js';
+            script.integrity = 'sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==';
+            script.crossOrigin = 'anonymous';
+            script.referrerPolicy = 'no-referrer';
+            document.head.appendChild(script);
         }
     }, { once: true, passive: true });
     </script>
