@@ -288,7 +288,18 @@ import Layout from '../layouts/Layout.astro';
             if (avatarEl) avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
             
             const displayNameEl = document.getElementById('style-a-display-name') as HTMLDivElement | null;
-            if (displayNameEl) displayNameEl.innerHTML = sourcePost.account.display_name;
+            if (displayNameEl) {
+                let displayName = sourcePost.account.display_name;
+                const corsProxy = 'https://cors.eu.org/';
+                if (sourcePost.account.emojis) {
+                    sourcePost.account.emojis.forEach(emoji => {
+                        const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
+                        const proxiedUrl = `${corsProxy}${emoji.url}`;
+                        displayName = displayName.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+                    });
+                }
+                displayNameEl.innerHTML = displayName;
+            }
             
             const usernameEl = document.getElementById('style-a-username') as HTMLDivElement | null;
             if (usernameEl) {
