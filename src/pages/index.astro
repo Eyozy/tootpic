@@ -1,22 +1,28 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import TemplateSelector from '../components/TemplateSelector.astro';
+import { templateManager } from '../utils/templateManager';
+import { imageGenerator } from '../utils/imageGenerator';
+import { domCache } from '../utils/domCache';
+import { API_CONFIG, DEFAULT_TEMPLATE_ID } from '../constants';
+import { Image } from 'astro:assets';
 ---
 
 <Layout>
     <main class="w-full max-w-[670px] mx-auto flex flex-col items-center gap-5">
         <header class="text-center w-full space-y-3 mb-1">
             <div class="flex items-center justify-center gap-3 md:gap-4">
-                <img src="/favicon.svg" alt="TootPic Logo" class="w-10 h-10 md:w-12 md:h-12" />
+                <Image src="/favicon.svg" alt="TootPic Logo" width={48} height={48} loading="eager" class="w-10 h-10 md:w-12 md:h-12" />
                 <h1 class="text-4xl md:text-5xl font-bold text-brand-gray-900 tracking-tight">
                     TootPic
                 </h1>
             </div>
             <p class="text-base md:text-lg text-brand-gray-600 max-w-xl mx-auto">
-                Turn your Mastodon toots into beautiful, shareable images.
+                Transform your Mastodon posts into beautiful, shareable images.
             </p>
         </header>
 
-                <div class="w-full space-y-4">
+        <div class="w-full space-y-4">
             <div class="w-full relative">
                 <label for="mastodon-url" class="sr-only">Mastodon Post URL</label>
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -27,65 +33,79 @@ import Layout from '../layouts/Layout.astro';
                 <input type="url" name="mastodon-url" id="mastodon-url" placeholder="https://mastodon.social/@user/123..." class="w-full pl-12 pr-5 py-3 border border-brand-gray-300 rounded-lg bg-white shadow-sm transition focus:outline-none focus:ring-0 focus:border-brand-blue" autocomplete="url" aria-required="true">
             </div>
             <button id="generate-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed">
-                Generate Image
+                Generate Preview
             </button>
-            <div id="error-message" class="text-red-500 text-sm text-center min-h-[1.25rem]"></div>
+            <div id="error-message" class="text-red-500 text-sm text-center min-h-[1.25rem]" role="alert" aria-live="polite"></div>
         </div>
 
         <div class="w-full space-y-5">
             <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
-                <button id="accordion-toggle" class="w-full flex items-center justify-between p-5">
-                    <h3 class="text-base font-semibold text-brand-gray-900">Customize</h3>
-                    <svg id="accordion-icon" class="w-5 h-5 text-brand-gray-500 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <button id="template-toggle" class="w-full flex items-center justify-between p-5">
+                    <h3 class="text-base font-semibold text-brand-gray-900">Choose Template</h3>
+                    <div class="flex items-center gap-3">
+                        <span id="current-template-name" class="text-sm text-brand-gray-600" data-template-id="classic">Classic</span>
+                        <svg class="w-5 h-5 text-brand-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </div>
+                </button>
+            </div>
+
+            <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
+                <button id="options-toggle" class="w-full flex items-center justify-between p-5" aria-expanded="false" aria-controls="options-content">
+                    <h3 class="text-base font-semibold text-brand-gray-900">Content Settings</h3>
+                    <svg id="options-icon" class="w-5 h-5 text-brand-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                 </button>
-                <div id="accordion-content" class="accordion-content">
-                    <div class="overflow-hidden">
-                        <div class="px-5 pb-5 space-y-4 border-t border-brand-gray-100 pt-5">
-                             <div class="flex items-center justify-between">
-                                <label for="stats-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Stats</label>
-                                <label for="stats-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
-                                    <input type="checkbox" name="visibility" id="stats-toggle" value="stats" class="sr-only peer" checked>
-                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                                    <span class="sr-only">Toggle stats visibility</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label for="timestamp-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Timestamp</label>
-                                <label for="timestamp-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
-                                    <input type="checkbox" name="visibility" id="timestamp-toggle" value="timestamp" class="sr-only peer" checked>
-                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                                    <span class="sr-only">Toggle timestamp visibility</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label for="username-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Username</label>
-                                <label for="username-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
-                                    <input type="checkbox" name="visibility" id="username-toggle" value="username" class="sr-only peer" checked>
-                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                                    <span class="sr-only">Toggle username visibility</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label for="use-original-post-data" class="text-brand-gray-700 cursor-pointer pr-4">Use Original Post Data</label>
-                                <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
-                                    <input type="checkbox" name="original-post" id="use-original-post-data" class="sr-only peer" checked>
-                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                                    <span class="sr-only">Toggle original post data usage</span>
-                                </label>
-                            </div>
+                <div id="options-content" class="accordion-content hidden">
+                    <div class="px-5 pb-5 space-y-4 border-t border-brand-gray-100 pt-5">
+                        <div class="flex items-center justify-between">
+                            <label for="stats-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Stats</label>
+                            <label for="stats-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                                <input type="checkbox" name="visibility" id="stats-toggle" value="stats" class="sr-only peer" checked>
+                                <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                <span class="sr-only">Toggle stats visibility</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label for="timestamp-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Timestamp</label>
+                            <label for="timestamp-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                                <input type="checkbox" name="visibility" id="timestamp-toggle" value="timestamp" class="sr-only peer" checked>
+                                <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                <span class="sr-only">Toggle timestamp visibility</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label for="username-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Username</label>
+                            <label for="username-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                                <input type="checkbox" name="visibility" id="username-toggle" value="username" class="sr-only peer" checked>
+                                <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                <span class="sr-only">Toggle username visibility</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label for="use-original-post-data" class="text-brand-gray-700 cursor-pointer pr-4">Use Original Post Data</label>
+                            <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                                <input type="checkbox" name="original-post" id="use-original-post-data" class="sr-only peer" checked>
+                                <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                <span class="sr-only">Toggle original post data usage</span>
+                            </label>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div id="preview-area" class="w-full flex-col items-center space-y-4 hidden mb-8">
+                <div class="w-full flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-brand-gray-900">Preview</h2>
+                    <div id="preview-status" class="text-sm text-brand-gray-600">Ready to generate</div>
+                </div>
                 <div id="image-container" class="w-full flex items-center justify-center">
                     <div id="loader" class="loader m-12 hidden"></div>
-                    <div id="style-a-container" class="p-8 w-full h-full hidden flex-col preview-card border rounded-xl">
+                    <div id="style-a-container" class="p-8 w-full h-full hidden flex-col preview-card border rounded-xl template-classic">
                         <div class="flex items-center mb-4">
-                            <img id="style-a-avatar" class="w-12 h-12 rounded-lg mr-4" src="" alt="Avatar" crossorigin="anonymous">
+                            <img id="style-a-avatar" class="w-12 h-12 rounded-lg mr-4" src="/favicon.svg" alt="User avatar" loading="eager" decoding="async" crossorigin="anonymous">
                             <div>
                                 <div id="style-a-display-name" class="font-bold text-primary text-base"></div>
                                 <div id="style-a-username" class="text-sm text-secondary"></div>
@@ -99,45 +119,71 @@ import Layout from '../layouts/Layout.astro';
                                 <span class="flex items-center">
                                     <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                        <!-- Use more reliable circle implementation -->
                                         <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"/>
                                         <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>
                                         <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"/>
                                     </svg>
                                     <span id="style-a-replies"></span>
                                 </span>
-                                <span class="flex items-center"><svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg><span id="style-a-boosts"></span></span>
-                                <span class="flex items-center"><svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg><span id="style-a-favs"></span></span>
+                                <span class="flex items-center">
+                                    <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                                    </svg>
+                                    <span id="style-a-boosts"></span>
+                                </span>
+                                <span class="flex items-center">
+                                    <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                                    </svg>
+                                    <span id="style-a-favs"></span>
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
-                 <button id="download-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed" disabled>
-                     <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                <button id="download-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed" disabled>
+                    <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                     Download Image
                 </button>
             </div>
         </div>
     </main>
 
+    <!-- Template Modal -->
+    <TemplateSelector selectedTemplateId={DEFAULT_TEMPLATE_ID} />
+
     <script>
+    import { templateManager } from '../utils/templateManager';
+    import { imageGenerator } from '../utils/imageGenerator';
+    import { domCache } from '../utils/domCache';
+    import { TEMPLATE_NAMES } from '../constants';
+
     declare var htmlToImage: any;
 
     document.addEventListener('DOMContentLoaded', () => {
-        const urlInput = document.getElementById('mastodon-url') as HTMLInputElement | null;
-        const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement | null;
-        const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement | null;
-        const errorMessage = document.getElementById('error-message') as HTMLDivElement | null;
-        const previewArea = document.getElementById('preview-area') as HTMLDivElement | null;
-        const loader = document.getElementById('loader') as HTMLDivElement | null;
-        const styleAContainer = document.getElementById('style-a-container') as HTMLDivElement | null;
-        
-        const visibilityCheckboxes = document.querySelectorAll<HTMLInputElement>('input[name="visibility"]');
-        const useOriginalPostDataCheckbox = document.getElementById('use-original-post-data') as HTMLInputElement | null;
+        // 使用 DOM 缓存获取元素
+        const urlInput = domCache.getElement('mastodon-url') as HTMLInputElement;
+        const generateBtn = domCache.getElement('generate-btn') as HTMLButtonElement;
+        const downloadBtn = domCache.getElement('download-btn') as HTMLButtonElement;
+        const errorMessage = domCache.getElement('error-message') as HTMLDivElement;
+        const previewArea = domCache.getElement('preview-area') as HTMLDivElement;
+        const loader = domCache.getElement('loader') as HTMLDivElement;
+        const styleAContainer = domCache.getElement('style-a-container') as HTMLDivElement;
 
-        const accordionToggle = document.getElementById('accordion-toggle') as HTMLButtonElement | null;
-        const accordionContent = document.getElementById('accordion-content') as HTMLDivElement | null;
-        const accordionIcon = document.getElementById('accordion-icon') as SVGElement | null;
+        // Options
+        const visibilityCheckboxes = document.querySelectorAll<HTMLInputElement>('input[name="visibility"]');
+        const useOriginalPostDataCheckbox = domCache.getElement('use-original-post-data') as HTMLInputElement;
+
+        // Template selector
+        const templateToggle = domCache.getElement('template-toggle') as HTMLButtonElement;
+
+        // Options accordion
+        const optionsToggle = domCache.getElement('options-toggle') as HTMLButtonElement;
+        const optionsContent = domCache.getElement('options-content') as HTMLDivElement;
+        const optionsIcon = domCache.getElement('options-icon') as SVGElement;
+        const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
 
         let postData: any = null;
         let visibility = {
@@ -146,14 +192,40 @@ import Layout from '../layouts/Layout.astro';
             username: true,
         };
 
-                generateBtn?.addEventListener('click', fetchMastodonPost);
-        downloadBtn?.addEventListener('click', downloadImage);
-
-        accordionToggle?.addEventListener('click', () => {
-            accordionIcon?.classList.toggle('rotate-180');
-            accordionContent?.classList.toggle('expanded');
+        // Event listeners
+        generateBtn?.addEventListener('click', fetchMastodonPost);
+        downloadBtn?.addEventListener('click', async () => {
+            try {
+                await imageGenerator.generateAndDownload();
+            } catch (error) {
+                console.error('Download failed:', error);
+                showError('Image generation failed. Please try again.');
+            }
         });
 
+        templateToggle?.addEventListener('click', () => {
+            templateManager.openModal();
+        });
+
+        optionsToggle?.addEventListener('click', () => {
+            toggleAccordion(optionsContent, optionsIcon, optionsToggle);
+        });
+
+        // Template selection - 使用 templateManager
+        document.addEventListener('templateSelected', (e: any) => {
+            if (postData) {
+                updatePreview();
+            }
+        });
+
+        // 初始化模板管理器
+        try {
+            templateManager.switchTemplate(templateManager.getCurrentTemplate());
+        } catch (error) {
+            console.error('Error initializing template manager:', error);
+        }
+
+        // Options change listeners
         const allCheckboxes = [...visibilityCheckboxes, useOriginalPostDataCheckbox].filter(cb => cb !== null) as HTMLInputElement[];
         allCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
@@ -168,35 +240,50 @@ import Layout from '../layouts/Layout.astro';
             });
         });
 
+        function toggleAccordion(content: HTMLElement | null, icon: SVGElement | null, button: HTMLElement | null) {
+            if (content && icon && button) {
+                const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                button.setAttribute('aria-expanded', (!isExpanded).toString());
+                icon.classList.toggle('rotate-180');
+                content.classList.toggle('hidden');
+            }
+        }
 
-        
-        function setPreviewState(state: 'loading' | 'content') {
-            loader?.classList.add('hidden');
-            styleAContainer?.classList.add('hidden');
-            
-            if (state === 'loading') {
-                loader?.classList.remove('hidden');
-            } else if (state === 'content') {
-                styleAContainer?.classList.remove('hidden');
+        // updateTemplateName 函数现在由 templateManager 处理，无需重复实现
+
+        function setPreviewState(state: 'loading' | 'content' | 'error') {
+            if (loader) loader.classList.add('hidden');
+            if (styleAContainer) styleAContainer.classList.add('hidden');
+
+            if (state === 'loading' && loader) {
+                loader.classList.remove('hidden');
+                if (previewStatus) previewStatus.textContent = 'Loading...';
+            } else if (state === 'content' && styleAContainer) {
+                styleAContainer.classList.remove('hidden');
+                if (previewStatus) previewStatus.textContent = 'Preview loaded successfully';
+                if (previewStatus) previewStatus.className = 'text-sm text-green-600';
+            } else if (state === 'error' && previewStatus) {
+                if (previewStatus) previewStatus.textContent = 'Error loading preview';
+                if (previewStatus) previewStatus.className = 'text-sm text-red-600';
             }
         }
 
         function setGenerateButtonState(isLoading: boolean) {
             if (isLoading && generateBtn) {
-                errorMessage!.textContent = '';
+                if (errorMessage) errorMessage.textContent = '';
                 generateBtn.disabled = true;
                 generateBtn.textContent = 'Fetching...';
             } else if (generateBtn) {
                 generateBtn.disabled = false;
-                generateBtn.textContent = 'Generate Image';
+                generateBtn.textContent = 'Generate Preview';
             }
         }
-        
+
         function showError(message: string) {
             if (errorMessage) errorMessage.textContent = message;
             if (previewArea) previewArea.classList.add('hidden');
             if (downloadBtn) downloadBtn.disabled = true;
-            document.documentElement.classList.remove('is-content-active');
+            setPreviewState('error');
         }
 
         async function fetchMastodonPost() {
@@ -212,24 +299,24 @@ import Layout from '../layouts/Layout.astro';
                 const urlObject = new URL(url);
                 const pathParts = urlObject.pathname.split('/').filter(p => p);
                 if (pathParts.length >= 2 && pathParts[0].startsWith('@')) {
-                     match = { instance: urlObject.hostname, id: pathParts[1] };
+                    match = { instance: urlObject.hostname, id: pathParts[1] };
                 } else {
-                     showError('Invalid URL format. Expected format: https://instance/@user/id');
-                     return;
+                    showError('Invalid URL format. Expected format: https://instance/@user/id');
+                    return;
                 }
             } catch(e) {
                 showError('Invalid URL format.');
                 return;
             }
-            
+
             if (!match) {
-                 showError('Could not parse instance and post ID from URL.');
-                 return;
+                showError('Could not parse instance and post ID from URL.');
+                return;
             }
 
             const { instance, id } = match;
             const apiUrl = `https://cors.eu.org/https://${instance}/api/v1/statuses/${id}`;
-            
+
             if (previewArea) previewArea.classList.remove('hidden');
             setGenerateButtonState(true);
             setPreviewState('loading');
@@ -241,7 +328,6 @@ import Layout from '../layouts/Layout.astro';
                     throw new Error(`Network error: ${response.statusText}`);
                 }
                 postData = await response.json();
-                document.documentElement.classList.add('is-content-active');
                 updatePreview();
                 if (downloadBtn) downloadBtn.disabled = false;
             } catch (error) {
@@ -251,15 +337,18 @@ import Layout from '../layouts/Layout.astro';
                 setGenerateButtonState(false);
             }
         }
-        
+
         function updatePreview() {
-            if (!postData || !useOriginalPostDataCheckbox) return;
-            
+            if (!postData || !useOriginalPostDataCheckbox || !styleAContainer) return;
+
             const useOriginal = useOriginalPostDataCheckbox.checked;
             const sourcePost = useOriginal && postData.reblog ? postData.reblog : postData;
 
-            let content = sourcePost.content;
+            // Update template class
+            const currentTemplate = templateManager.getCurrentTemplate();
+            styleAContainer.className = `p-8 w-full h-full hidden flex-col preview-card border rounded-xl template-${currentTemplate}`;
 
+            let content = sourcePost.content;
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
             const links = tempDiv.querySelectorAll('a');
@@ -272,6 +361,7 @@ import Layout from '../layouts/Layout.astro';
 
             const corsProxy = 'https://cors.eu.org/';
 
+            // Process emojis
             if (sourcePost.emojis) {
                 sourcePost.emojis.forEach(emoji => {
                     const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
@@ -280,17 +370,19 @@ import Layout from '../layouts/Layout.astro';
                 });
             }
 
+            // Format date and time
             const date = new Date(sourcePost.created_at);
             const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            
+
+            // Update avatar
             const avatarEl = document.getElementById('style-a-avatar') as HTMLImageElement | null;
             if (avatarEl) avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
-            
+
+            // Update display name with emojis
             const displayNameEl = document.getElementById('style-a-display-name') as HTMLDivElement | null;
             if (displayNameEl) {
                 let displayName = sourcePost.account.display_name;
-                const corsProxy = 'https://cors.eu.org/';
                 if (sourcePost.account.emojis) {
                     sourcePost.account.emojis.forEach(emoji => {
                         const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
@@ -300,7 +392,8 @@ import Layout from '../layouts/Layout.astro';
                 }
                 displayNameEl.innerHTML = displayName;
             }
-            
+
+            // Update username
             const usernameEl = document.getElementById('style-a-username') as HTMLDivElement | null;
             if (usernameEl) {
                 let fullAcct = sourcePost.account.acct;
@@ -314,97 +407,102 @@ import Layout from '../layouts/Layout.astro';
                 usernameEl.style.display = visibility.username ? 'block' : 'none';
             }
 
+            // Update content
             const contentEl = document.getElementById('style-a-content') as HTMLDivElement | null;
             if (contentEl) contentEl.innerHTML = content;
-            
-            const attachmentContainer = document.getElementById('style-a-attachment') as HTMLDivElement | null;
-            if (attachmentContainer) {
-                attachmentContainer.innerHTML = '';
-                attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100';
 
-                // 处理所有媒体附件，包括图片、GIF和视频
-                const mediaAttachments = sourcePost.media_attachments;
-                
-                if (mediaAttachments.length > 0) {
-                    attachmentContainer.style.display = 'grid';
-                    attachmentContainer.classList.add('gap-px');
-                    
-                    // 限制最多显示4个附件
-                    const attachmentsToDisplay = mediaAttachments.slice(0, 4);
-                    
-                    // 计算网格布局
-                    switch (attachmentsToDisplay.length) {
-                        case 1: 
-                            attachmentContainer.style.gridTemplateColumns = '1fr'; 
-                            attachmentContainer.style.gridTemplateRows = '1fr';
-                            break;
-                        case 2: 
-                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr'; 
-                            attachmentContainer.style.gridTemplateRows = '1fr';
-                            break;
-                        case 3: 
-                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
-                            attachmentContainer.style.gridTemplateRows = '1fr 1fr';
-                            break;
-                        case 4: 
-                            attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
-                            attachmentContainer.style.gridTemplateRows = '1fr 1fr';
-                            break;
+            // Update media attachments
+            updateMediaAttachments(sourcePost.media_attachments);
+
+            // Update timestamp and stats
+            updateFooterSection(sourcePost, visibility, formattedTime, formattedDate);
+
+            setPreviewState('content');
+        }
+
+        function updateMediaAttachments(mediaAttachments: any[]) {
+            const attachmentContainer = document.getElementById('style-a-attachment') as HTMLDivElement | null;
+            if (!attachmentContainer) return;
+
+            attachmentContainer.innerHTML = '';
+            attachmentContainer.className = 'mt-3 rounded-lg overflow-hidden border bg-gray-100';
+
+            if (mediaAttachments.length > 0) {
+                attachmentContainer.style.display = 'grid';
+                attachmentContainer.classList.add('gap-px');
+
+                const attachmentsToDisplay = mediaAttachments.slice(0, 4);
+
+                // Calculate grid layout
+                switch (attachmentsToDisplay.length) {
+                    case 1:
+                        attachmentContainer.style.gridTemplateColumns = '1fr';
+                        break;
+                    case 2:
+                        attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
+                        break;
+                    case 3:
+                        attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
+                        break;
+                    case 4:
+                        attachmentContainer.style.gridTemplateColumns = '1fr 1fr';
+                        break;
+                }
+
+                const corsProxy = 'https://cors.eu.org/';
+                attachmentsToDisplay.forEach((attachment: any, index: number) => {
+                    const imgWrapper = document.createElement('div');
+                    imgWrapper.className = 'overflow-hidden relative';
+
+                    const img = document.createElement('img');
+                    img.crossOrigin = 'anonymous';
+                    img.alt = attachment.description || `Post attachment ${index + 1}`;
+                    img.className = 'w-full h-full object-cover';
+
+                    if (attachment.type === 'image') {
+                        img.src = `${corsProxy}${attachment.url}`;
+                    } else {
+                        const imageUrl = attachment.preview_url || attachment.url;
+                        img.src = `${corsProxy}${imageUrl}`;
                     }
 
-                    attachmentsToDisplay.forEach((attachment: any, index: number) => {
-                        const imgWrapper = document.createElement('div');
-                        imgWrapper.className = 'overflow-hidden relative';
-                        
-                        const img = document.createElement('img');
-                        img.crossOrigin = 'anonymous';
-                        img.alt = attachment.description || `Post attachment ${index + 1}`;
-                        img.className = 'w-full h-full object-cover';
+                    imgWrapper.appendChild(img);
 
-                        if (attachment.type === 'image') {
-                            img.src = `${corsProxy}${attachment.url}`;
-                        } else {
-                            // For GIFs and videos, use the preview URL for the static image
-                            const imageUrl = attachment.preview_url || attachment.url;
-                            img.src = `${corsProxy}${imageUrl}`;
-                        }
-                        
-                        imgWrapper.appendChild(img);
+                    // Add indicators for GIF and Video
+                    if (attachment.type === 'gifv') {
+                        const gifIndicator = document.createElement('div');
+                        gifIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded';
+                        gifIndicator.textContent = 'GIF';
+                        imgWrapper.appendChild(gifIndicator);
+                    } else if (attachment.type === 'video') {
+                        const videoIndicator = document.createElement('div');
+                        videoIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center';
+                        videoIndicator.innerHTML = `
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/>
+                            </svg>
+                            Video
+                        `;
+                        imgWrapper.appendChild(videoIndicator);
+                    }
 
-                        // Add indicators for GIF and Video
-                        if (attachment.type === 'gifv') {
-                            const gifIndicator = document.createElement('div');
-                            gifIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded';
-                            gifIndicator.textContent = 'GIF';
-                            imgWrapper.appendChild(gifIndicator);
-                        } else if (attachment.type === 'video') {
-                            const videoIndicator = document.createElement('div');
-                            videoIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center';
-                            videoIndicator.innerHTML = `
-                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/>
-                                </svg>
-                                Video
-                            `;
-                            imgWrapper.appendChild(videoIndicator);
-                        }
-                        
-                        // 特殊处理3个附件的情况
-                        if (attachmentsToDisplay.length === 3 && index === 0) {
-                            imgWrapper.style.gridRow = 'span 2 / span 2';
-                        }
-                        
-                        attachmentContainer.appendChild(imgWrapper);
-                    });
-                } else {
-                    attachmentContainer.style.display = 'none';
-                }
+                    // Special handling for 3 attachments
+                    if (attachmentsToDisplay.length === 3 && index === 0) {
+                        imgWrapper.style.gridRow = 'span 2 / span 2';
+                    }
+
+                    attachmentContainer.appendChild(imgWrapper);
+                });
+            } else {
+                attachmentContainer.style.display = 'none';
             }
-            
+        }
+
+        function updateFooterSection(sourcePost: any, visibility: any, formattedTime: string, formattedDate: string) {
             const bottomSection = document.getElementById('bottom-section') as HTMLDivElement | null;
             const timestampEl = document.getElementById('style-a-timestamp') as HTMLDivElement | null;
             const statsEl = document.getElementById('style-a-stats') as HTMLDivElement | null;
-            
+
             if (timestampEl) {
                 timestampEl.textContent = `${formattedTime} · ${formattedDate}`;
                 timestampEl.style.display = visibility.timestamp ? 'block' : 'none';
@@ -417,96 +515,142 @@ import Layout from '../layouts/Layout.astro';
             if (repliesEl) repliesEl.textContent = sourcePost.replies_count;
             if (boostsEl) boostsEl.textContent = sourcePost.reblogs_count;
             if (favsEl) favsEl.textContent = sourcePost.favourites_count;
-            
+
             if (statsEl) {
                 statsEl.style.display = visibility.stats ? 'flex' : 'none';
             }
-            
+
             const shouldShowBottomSection = visibility.timestamp || visibility.stats;
             if (bottomSection) {
                 bottomSection.style.display = shouldShowBottomSection ? 'block' : 'none';
                 bottomSection.style.borderTopWidth = shouldShowBottomSection ? '1px' : '0';
             }
-
-            setPreviewState('content');
         }
 
-        async function downloadImage() {
-            const originalNode = document.getElementById('style-a-container') as HTMLDivElement | null;
-            if (!originalNode || !postData) return;
+        // downloadImage 函数现在由 imageGenerator 类处理，无需重复实现
 
-            if (!downloadBtn) return;
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Preparing...';
+        // Load html-to-image library when user focuses on input
+        urlInput?.addEventListener('focus', () => {
+            if (typeof htmlToImage === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js';
+                script.integrity = 'sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==';
+                script.crossOrigin = 'anonymous';
+                script.referrerPolicy = 'no-referrer';
+                document.head.appendChild(script);
+            }
+        }, { once: true, passive: true });
+    });
+    </script>
 
-            const clone = originalNode.cloneNode(true) as HTMLDivElement;
-            
-                        clone.classList.remove('preview-card', 'border', 'rounded-xl');
-            
-                        clone.style.width = '670px';
-            clone.style.maxWidth = 'none';
+    <style>
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
 
-                        const tempContainer = document.createElement('div');
-            tempContainer.style.position = 'absolute';
-            tempContainer.style.left = '-9999px';
-            tempContainer.style.top = '0';
-            
-            tempContainer.appendChild(clone);
-            document.body.appendChild(tempContainer);
+        /* Accordion animations */
+        .accordion-content {
+            transition: all 0.3s ease-in-out;
+            transform-origin: top;
+        }
 
-            try {
-                downloadBtn.textContent = 'Generating...';
-                if (typeof htmlToImage === 'undefined') {
-                    throw new Error('htmlToImage library not loaded.');
-                }
+        .accordion-content.hidden {
+            max-height: 0;
+            opacity: 0;
+            transform: scaleY(0);
+            overflow: hidden;
+        }
 
-                const dataUrl = await htmlToImage.toPng(clone, { 
-                    quality: 1,
-                    pixelRatio: 3,
-                    cacheBust: true,
-                    backgroundColor: '#ffffff',
-                    style: {
-                        transform: 'scale(1)',
-                        transformOrigin: 'top left'
-                    }
-                });
+        .accordion-content:not(.hidden) {
+            max-height: 500px;
+            opacity: 1;
+            transform: scaleY(1);
+        }
 
-                const link = document.createElement('a');
-                link.download = `tootpic-${postData.id}.png`;
-                link.href = dataUrl;
-                link.click();
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
 
-            } catch (error) {
-                console.error('Oops, something went wrong!', error);
-                showError('Image generation failed. Please try again.');
-            } finally {
-                // Clean up
-                if (document.body.contains(tempContainer)) {
-                    document.body.removeChild(tempContainer);
-                }
-                
-                if (downloadBtn) {
-                    downloadBtn.disabled = false;
-                    downloadBtn.innerHTML = `
-                        <svg class="inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Image
-                    `;
-                }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Template styles */
+        .template-classic {
+            background: white;
+            border-color: #e5e7eb;
+        }
+
+        .template-magazine {
+            background: #faf8f5;
+            border-color: #e8e4de;
+            font-family: 'Georgia', 'Times New Roman', serif;
+        }
+
+        .template-dark {
+            background: #2d3748;
+            border-color: #4a5568;
+            color: #ffffff;
+        }
+
+        .template-dark .text-primary {
+            color: #ffffff !important;
+        }
+
+        .template-dark .text-secondary {
+            color: #cccccc !important;
+        }
+
+        .template-dark img {
+            border: none !important;
+        }
+
+        .template-dark #style-a-attachment {
+            background: #374151 !important;
+            border-color: #4a5568 !important;
+        }
+
+        .template-dark #bottom-section {
+            border-color: #4a5568 !important;
+        }
+
+        /* Custom emoji styles */
+        .custom-emoji {
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            margin: 0 1px;
+        }
+
+        /* Consistent border radius for images */
+        #style-a-avatar {
+            border-radius: 8px;
+        }
+
+        .template-dark #style-a-avatar {
+            border-radius: 8px;
+        }
+
+        /* Media attachments - consistent border radius */
+        #style-a-attachment img {
+            border-radius: 8px;
+        }
+
+        .template-dark #style-a-attachment img {
+            border-radius: 8px;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .preview-card {
+                padding: 1rem;
             }
         }
-
-          });
-
-        const urlInput = document.getElementById('mastodon-url') as HTMLInputElement | null;
-    urlInput?.addEventListener('focus', () => {
-        if (typeof htmlToImage === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js';
-            script.integrity = 'sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==';
-            script.crossOrigin = 'anonymous';
-            script.referrerPolicy = 'no-referrer';
-            document.head.appendChild(script);
-        }
-    }, { once: true, passive: true });
-    </script>
+    </style>
 </Layout>

@@ -1,0 +1,522 @@
+---
+import { TEMPLATES } from '../data/templates';
+import type { TemplateConfig } from '../types/template';
+
+interface Props {
+  selectedTemplateId?: string;
+}
+
+const { selectedTemplateId = 'classic' } = Astro.props;
+---
+
+<!-- Template Modal -->
+<div id="template-modal" class="template-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-backdrop" onclick="closeTemplateModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modal-title" class="modal-title">Choose Template</h2>
+      <button type="button" class="modal-close" onclick="closeTemplateModal()" aria-label="Close modal">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="template-grid">
+        {TEMPLATES.map(template => (
+          <div
+            class="template-option"
+            data-template-id={template.id}
+            onclick="selectTemplate(this.getAttribute('data-template-id'))"
+            role="button"
+            tabindex="0"
+            aria-pressed="false"
+            onkeypress="if(event.key === 'Enter' || event.key === ' ') { selectTemplate(this.getAttribute('data-template-id')) }"
+          >
+            <div class="template-preview">
+              <div class={`template-preview-placeholder template-preview-${template.id}`}>
+                <div class="preview-icon">
+                  {template.id === 'classic' && (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/>
+                      <line x1="3" y1="9" x2="21" y2="9" stroke-width="2"/>
+                      <circle cx="8" cy="13" r="1" fill="currentColor"/>
+                      <path d="M12 13h6" stroke-width="2" stroke-linecap="round"/>
+                      <circle cx="8" cy="17" r="1" fill="currentColor"/>
+                      <path d="M12 17h6" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  )}
+                  {template.id === 'magazine' && (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <rect x="2" y="4" width="20" height="16" rx="2" stroke-width="2"/>
+                      <line x1="2" y1="10" x2="22" y2="10" stroke-width="2"/>
+                      <line x1="7" y1="14" x2="17" y2="14" stroke-width="2"/>
+                      <line x1="7" y1="17" x2="14" y2="17" stroke-width="2"/>
+                    </svg>
+                  )}
+                  {template.id === 'dark' && (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <rect x="3" y="3" width="18" height="18" rx="3" fill="#2d3748" stroke="#4a5568" stroke-width="2"/>
+                      <circle cx="12" cy="12" r="3" fill="none" stroke="#cbd5e0" stroke-width="1.5"/>
+                    </svg>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div class="template-info">
+              <div class="template-name">{template.name}</div>
+              <div class="template-description">{template.description}</div>
+            </div>
+
+            <div class="template-selected-indicator" style="display: none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { templateManager } from '../utils/templateManager';
+
+  // Expose openTemplateModal for parent component to call via custom event
+  document.addEventListener('openTemplateModalEvent', () => {
+    templateManager.openModal();
+  });
+
+  // Initialize template selection on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    // Wait for all components to be ready
+    setTimeout(() => {
+      templateManager.switchTemplate(templateManager.getCurrentTemplate());
+    }, 100);
+  });
+</script>
+
+<style>
+  /* Modal Styles */
+  .template-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-content {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    max-width: 95vw;
+    width: 800px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    animation: modalSlideIn 0.3s ease-out;
+  }
+
+  /* Responsive height for tablets */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .modal-content {
+      max-height: 85vh;
+      height: auto;
+    }
+
+    .modal-body {
+      max-height: calc(85vh - 100px);
+    }
+  }
+
+  /* Large screens - no height restriction */
+  @media (min-width: 1024px) {
+    .modal-content {
+      max-height: 90vh;
+    }
+  }
+
+  @keyframes modalSlideIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .modal-body {
+    padding: 24px;
+    max-height: calc(90vh - 100px);
+    overflow-y: auto;
+  }
+
+  /* Template Grid */
+  .template-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Responsive grid */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .template-grid {
+      grid-template-columns: repeat(3, 1fr); /* Changed from 2 to 3 columns */
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .template-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  /* Mobile optimization - template cards fill width */
+  @media (max-width: 767px) {
+    .template-option {
+      width: 100%;
+    }
+
+    .template-preview {
+      width: 100%;
+      height: 120px;
+    }
+
+    .template-info {
+      text-align: center;
+      padding: 12px 0 0 0;
+    }
+
+    .template-name {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+
+    .template-description {
+      font-size: 13px;
+      line-height: 1.3;
+    }
+  }
+
+  /* Large mobile layout - side by side */
+  @media (min-width: 480px) and (max-width: 767px) {
+    .template-option {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .template-preview {
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+      margin-bottom: 0;
+    }
+
+    .template-info {
+      text-align: left;
+      flex: 1;
+      padding: 0;
+    }
+
+    .template-name {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .template-description {
+      font-size: 12px;
+      display: block;
+    }
+  }
+
+  /* Small mobile - horizontal layout for better space utilization */
+  @media (max-width: 479px) {
+    .template-option {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      gap: 16px;
+      text-align: left;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+      background: linear-gradient(135deg, #fafbfc 0%, #f3f4f6 100%);
+    }
+
+    .template-preview {
+      width: 100px;
+      height: 75px;
+      flex-shrink: 0;
+      margin-bottom: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      aspect-ratio: 4/3;
+    }
+
+    .template-info {
+      padding: 0;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .template-description {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      font-size: 12px;
+      line-height: 1.3;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* Extra small mobile - hide description for very small screens */
+    @media (max-width: 425px) {
+      .template-description {
+        display: none;
+      }
+
+      .template-name {
+        font-size: 16px;
+        margin-bottom: 0;
+      }
+
+      .template-preview {
+        width: 90px;
+        height: 68px;
+      }
+    }
+  }
+
+  /* Template Options */
+  .template-option {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .template-option:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    outline: none;
+  }
+
+  .template-option-selected {
+    border-color: #3b82f6;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  }
+
+  /* Template Preview */
+  .template-preview {
+    margin-bottom: 12px;
+    aspect-ratio: 16/9;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .template-preview-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  .template-preview-classic {
+    background: white;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .template-preview-magazine {
+    background: #faf8f5;
+    border: 1px solid #e8e4de;
+  }
+
+  .template-preview-dark {
+    background: #2d3748;
+    border: 1px solid #4a5568;
+  }
+
+  .preview-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .template-preview-classic .preview-icon {
+    color: #374151;
+  }
+
+  .template-preview-magazine .preview-icon {
+    color: #8b7355;
+  }
+
+  .template-preview-dark .preview-icon {
+    color: #ccc;
+  }
+
+  /* Template Info */
+  .template-info {
+    text-align: center;
+  }
+
+  .template-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 4px;
+  }
+
+  .template-description {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.4;
+  }
+
+  /* Selected Indicator */
+  .template-selected-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    animation: checkmark-appear 0.3s ease;
+  }
+
+  .template-selected-indicator svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 3;
+  }
+
+  @keyframes checkmark-appear {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Responsive Design */
+  @media (max-width: 640px) {
+    .modal-content {
+      width: 95vw;
+      margin: 16px;
+    }
+
+    .modal-header {
+      padding: 20px;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .template-option {
+      padding: 12px;
+    }
+
+    .template-preview {
+      height: 60px;
+    }
+
+    .template-name {
+      font-size: 15px;
+    }
+
+    .template-description {
+      font-size: 13px;
+    }
+  }
+
+  /* Accessibility */
+  .template-option:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  .template-modal[aria-hidden="true"] {
+    display: none;
+  }
+
+  .hidden {
+    display: none;
+  }
+</style>
