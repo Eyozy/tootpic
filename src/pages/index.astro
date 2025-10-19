@@ -53,7 +53,7 @@ import { Image } from 'astro:assets';
 
             <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
                 <button id="options-toggle" class="w-full flex items-center justify-between p-5" aria-expanded="false" aria-controls="options-content">
-                    <h3 class="text-base font-semibold text-brand-gray-900">Content Settings</h3>
+                    <h2 class="text-base font-semibold text-brand-gray-900">Content Settings</h2>
                     <svg id="options-icon" class="w-5 h-5 text-brand-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
@@ -62,7 +62,7 @@ import { Image } from 'astro:assets';
                     <div class="px-5 pb-5 space-y-4 border-t border-brand-gray-100 pt-5">
                         <div class="flex items-center justify-between">
                             <label for="stats-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Stats</label>
-                            <label for="stats-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                            <label for="stats-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="stats-toggle" value="stats" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                                 <span class="sr-only">Toggle stats visibility</span>
@@ -70,7 +70,7 @@ import { Image } from 'astro:assets';
                         </div>
                         <div class="flex items-center justify-between">
                             <label for="timestamp-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Timestamp</label>
-                            <label for="timestamp-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                            <label for="timestamp-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="timestamp-toggle" value="timestamp" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                                 <span class="sr-only">Toggle timestamp visibility</span>
@@ -78,7 +78,7 @@ import { Image } from 'astro:assets';
                         </div>
                         <div class="flex items-center justify-between">
                             <label for="username-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Username</label>
-                            <label for="username-toggle" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                            <label for="username-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="username-toggle" value="username" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                                 <span class="sr-only">Toggle username visibility</span>
@@ -86,7 +86,7 @@ import { Image } from 'astro:assets';
                         </div>
                         <div class="flex items-center justify-between">
                             <label for="use-original-post-data" class="text-brand-gray-700 cursor-pointer pr-4">Use Original Post Data</label>
-                            <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer" aria-hidden="true">
+                            <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="original-post" id="use-original-post-data" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                                 <span class="sr-only">Toggle original post data usage</span>
