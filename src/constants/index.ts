@@ -7,7 +7,8 @@
 export const TEMPLATE_NAMES = {
   classic: 'Classic',
   magazine: 'Magazine',
-  dark: 'Dark',
+  dark: 'Classic (Dark)', // Modified to Classic (Dark)
+  'magazine-dark': 'Magazine (Dark)',
 } as const;
 
 // Default template
@@ -29,5 +30,6 @@ export const IMAGE_CONFIG = {
     classic: '#ffffff',
     magazine: '#faf8f5',
     dark: '#2d3748',
+    'magazine-dark': '#2d3748', // Add background for magazine-dark
   },
 } as const;

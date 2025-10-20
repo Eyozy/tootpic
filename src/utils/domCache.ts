@@ -46,20 +46,6 @@ export class DOMCache {
   }
 
   /**
-   * Clear cache for specific element
-   */
-  clearCache(id: string): void {
-    this.cache.delete(id);
-  }
-
-  /**
-   * Clear entire cache
-   */
-  clearAllCache(): void {
-    this.cache.clear();
-  }
-
-  /**
    * Setup mutation observer to clear cache when DOM changes
    */
   private setupObserver(): void {
@@ -96,7 +82,7 @@ export class DOMCache {
       this.observer.disconnect();
       this.observer = undefined;
     }
-    this.clearAllCache();
+    this.cache.clear();
   }
 }
 

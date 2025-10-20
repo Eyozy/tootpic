@@ -1,5 +1,5 @@
 /**
- * Template management class with state and functionality
+ * Manages template selection and application, including layout and appearance modes.
  */
 
 import { TEMPLATES } from '../data/templates';
@@ -10,6 +10,8 @@ export interface TemplateState {
   currentTemplate: string;
   isModalOpen: boolean;
   selectedTemplateId: string;
+  selectedLayout: string; // Add selectedLayout to state
+  selectedAppearance: string; // Add selectedAppearance to state
 }
 
 export class TemplateManager {
@@ -21,6 +23,8 @@ export class TemplateManager {
       currentTemplate: 'classic',
       isModalOpen: false,
       selectedTemplateId: 'classic',
+      selectedLayout: 'classic', // Initialize selectedLayout
+      selectedAppearance: 'light', // Initialize selectedAppearance
     };
     this.bindEvents();
   }
@@ -50,28 +54,43 @@ export class TemplateManager {
    * Switch to a template
    */
   switchTemplate(templateId: string): void {
-    if (templateId === this.state.currentTemplate) return;
+    if (templateId === this.state.currentTemplate) {
+      return;
+    }
 
     const oldTemplate = this.state.currentTemplate;
     this.state.currentTemplate = templateId;
     this.state.selectedTemplateId = templateId;
 
-    // Update UI
+    // Add transition effects
+    this.addTransitionEffects();
+
+    // Update UI with transitions
     this.updateTemplateName(templateId);
     this.updatePreviewCard(templateId);
-    this.updateModalSelection(templateId);
+    this.updateSelectionUI();
 
-    // Emit event
+    // Remove transition effects after animation completes
+    setTimeout(() => {
+      this.removeTransitionEffects();
+    }, 700); // Match the longest CSS transition duration
+
+    // Dispatch unified template change event
+    const event = new CustomEvent('templateChanged', {
+      detail: {
+        oldTemplate,
+        newTemplate: templateId,
+        layout: this.state.selectedLayout,
+        appearance: this.state.selectedAppearance
+      }
+    });
+    document.dispatchEvent(event);
+
+    // Keep internal event for compatibility during transition
     this.emit('templateChanged', {
       oldTemplate,
       newTemplate: templateId,
     });
-
-    // Dispatch custom event for compatibility
-    const event = new CustomEvent('templateSelected', {
-      detail: { templateId }
-    });
-    document.dispatchEvent(event);
   }
 
   /**
@@ -93,38 +112,13 @@ export class TemplateManager {
     if (!previewCard) return;
 
     // Remove all template classes
-    previewCard.classList.remove('template-classic', 'template-magazine', 'template-dark');
+    previewCard.classList.remove('template-classic', 'template-magazine', 'template-dark', 'template-magazine-dark');
 
     // Add new template class
     previewCard.classList.add(`template-${templateId}`);
   }
 
-  /**
-   * Update modal selection state
-   */
-  private updateModalSelection(templateId: string): void {
-    const templateOptions = domCache.querySelectorAll('.template-option');
-
-    templateOptions.forEach(option => {
-      const optionTemplateId = option.getAttribute('data-template-id');
-      const indicator = option.querySelector('.template-selected-indicator');
-
-      if (optionTemplateId === templateId) {
-        option.classList.add('template-option-selected');
-        option.setAttribute('aria-pressed', 'true');
-        if (indicator) {
-          (indicator as HTMLElement).style.display = 'flex';
-        }
-      } else {
-        option.classList.remove('template-option-selected');
-        option.setAttribute('aria-pressed', 'false');
-        if (indicator) {
-          (indicator as HTMLElement).style.display = 'none';
-        }
-      }
-    });
-  }
-
+  
   /**
    * Open modal
    */
@@ -136,12 +130,12 @@ export class TemplateManager {
       modal.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
 
-      // Update selection and focus
-      this.updateModalSelection(this.state.currentTemplate);
-      const firstOption = modal.querySelector('.template-option');
-      if (firstOption) {
-        (firstOption as HTMLElement).focus();
-      }
+    // Update selection and focus
+    this.initializeSelections(); // Use the new initialization method
+    const firstOption = modal.querySelector('.layout-option');
+    if (firstOption) {
+      (firstOption as HTMLElement).focus();
+    }
     }
 
     this.emit('modalOpened');
@@ -198,7 +192,7 @@ export class TemplateManager {
   }
 
   /**
-   * Bind global events
+   * Bind global events with event delegation
    */
   private bindEvents(): void {
     // Keyboard navigation
@@ -218,12 +212,83 @@ export class TemplateManager {
           this.closeModal();
         }
       }
+
+      // Handle layout selection clicks via event delegation
+      const layoutOption = target.closest('.layout-option');
+      if (layoutOption) {
+        const layout = layoutOption.getAttribute('data-layout');
+        if (layout) {
+          e.preventDefault();
+          this.selectLayout(layout);
+        }
+      }
+
+      // Handle appearance selection clicks via event delegation
+      const appearanceOption = target.closest('.appearance-option');
+      if (appearanceOption) {
+        const radio = appearanceOption.querySelector('input[type="radio"]');
+        if (radio) {
+          const appearance = radio.getAttribute('value');
+          if (appearance) {
+            e.preventDefault();
+            this.selectAppearance(appearance);
+          }
+        }
+      }
+
+      // Handle modal close button clicks via event delegation
+      if (target.closest('.modal-close')) {
+        e.preventDefault();
+        this.closeModal();
+      }
     });
 
     // Custom event for modal opening
     document.addEventListener('openTemplateModalEvent', () => {
       this.openModal();
     });
+  }
+
+  /**
+   * Add enhanced transition effects for template switching
+   */
+  private addTransitionEffects(): void {
+    const previewCard = domCache.querySelector('.preview-card');
+    const templateName = domCache.getElement('current-template-name');
+    const templateContent = domCache.querySelector('.template-content');
+
+    if (previewCard) {
+      previewCard.classList.add('changing', 'switching');
+    }
+
+    if (templateName) {
+      templateName.classList.add('updating');
+    }
+
+    if (templateContent) {
+      templateContent.classList.add('changing');
+    }
+  }
+
+  /**
+   * Remove transition effects after animation completes
+   */
+  private removeTransitionEffects(): void {
+    const previewCard = domCache.querySelector('.preview-card');
+    const templateName = domCache.getElement('current-template-name');
+    const templateContent = domCache.querySelector('.template-content');
+
+    if (previewCard) {
+      previewCard.classList.remove('changing', 'switching');
+    }
+
+    if (templateName) {
+      templateName.classList.remove('updating');
+    }
+
+    if (templateContent) {
+      templateContent.classList.remove('changing');
+    }
   }
 
   /**
@@ -236,35 +301,139 @@ export class TemplateManager {
     // Clear DOM cache
     domCache.destroy();
   }
-}
 
-// Expose functions globally for onclick handlers
-declare global {
-  interface Window {
-    selectTemplate: (templateId: string) => void;
-    closeTemplateModal: () => void;
+  /**
+   * Initializes the selected layout and appearance based on the current template.
+   */
+  initializeSelections(): void {
+    const currentTemplateId = this.getCurrentTemplate();
+    // Determine layout and appearance from currentTemplateId
+    if (currentTemplateId === 'dark') {
+      this.state.selectedLayout = 'classic';
+      this.state.selectedAppearance = 'dark';
+    } else if (currentTemplateId === 'magazine') {
+      this.state.selectedLayout = 'magazine';
+      this.state.selectedAppearance = 'light';
+    } else if (currentTemplateId === 'magazine-dark') { // Handle new magazine-dark template
+      this.state.selectedLayout = 'magazine';
+      this.state.selectedAppearance = 'dark';
+    }
+    else {
+      this.state.selectedLayout = 'classic';
+      this.state.selectedAppearance = 'light';
+    }
+    this.updateSelectionUI();
+  }
+
+  selectLayout(layout: string): void {
+    if (!layout || typeof layout !== 'string') {
+      throw new Error('Invalid layout parameter');
+    }
+
+    const validLayouts = ['classic', 'magazine'];
+    if (!validLayouts.includes(layout)) {
+      throw new Error(`Unsupported layout: ${layout}`);
+    }
+
+    this.state.selectedLayout = layout;
+    this.updateSelectionUI();
+    this.applySelectedTemplate(); // Apply immediately on layout change
+  }
+
+  selectAppearance(appearance: string): void {
+    if (!appearance || typeof appearance !== 'string') {
+      throw new Error('Invalid appearance parameter');
+    }
+
+    const validAppearances = ['light', 'dark'];
+    if (!validAppearances.includes(appearance)) {
+      throw new Error(`Unsupported appearance: ${appearance}`);
+    }
+
+    this.state.selectedAppearance = appearance;
+    this.updateSelectionUI();
+    this.applySelectedTemplate(); // Apply immediately on appearance change
+  }
+
+  /**
+   * Maps layout and appearance combination to template ID
+   */
+  private mapToTemplateId(layout: string, appearance: string): string {
+    const templateMap: Record<string, Record<string, string>> = {
+      'classic': {
+        'light': 'classic',
+        'dark': 'dark'
+      },
+      'magazine': {
+        'light': 'magazine',
+        'dark': 'magazine-dark'
+      }
+    };
+
+    return templateMap[layout]?.[appearance] || 'classic';
+  }
+
+  /**
+   * Applies the selected template based on the current layout and appearance.
+   */
+  applySelectedTemplate(): void {
+    try {
+      const templateId = this.mapToTemplateId(this.state.selectedLayout, this.state.selectedAppearance);
+      this.switchTemplate(templateId);
+    } catch (error) {
+      console.error('Failed to apply selected template:', error);
+      // Fallback to classic light template
+      this.switchTemplate('classic');
+    }
+  }
+
+  private updateSelectionUI(): void {
+    const layoutOptions = domCache.querySelectorAll('.layout-option');
+    layoutOptions.forEach(option => {
+      const layout = option.getAttribute('data-layout');
+      if (layout === this.state.selectedLayout) {
+        option.classList.add('layout-option-selected');
+        option.setAttribute('aria-pressed', 'true');
+      } else {
+        option.classList.remove('layout-option-selected');
+        option.setAttribute('aria-pressed', 'false');
+      }
+    });
+
+    const appearanceRadios = domCache.querySelectorAll<HTMLInputElement>('input[name="appearance"]');
+    appearanceRadios.forEach(radio => {
+      if (radio.value === this.state.selectedAppearance) {
+        radio.checked = true;
+      } else {
+        radio.checked = false; // Ensure other radios are unchecked
+      }
+    });
+
+    // Update schematic visibility based on selected appearance and layout
+    const classicLight = domCache.querySelector('.layout-classic-light');
+    const classicDark = domCache.querySelector('.layout-classic-dark');
+    const magazineLight = domCache.querySelector('.layout-magazine-light');
+    const magazineDark = domCache.querySelector('.layout-magazine-dark');
+
+    // Always show light version for non-selected layouts, or if selected layout is light
+    if (classicLight) classicLight.classList.remove('hidden');
+    if (classicDark) classicDark.classList.add('hidden');
+    if (magazineLight) magazineLight.classList.remove('hidden');
+    if (magazineDark) magazineDark.classList.add('hidden');
+
+    // Apply dark mode only to the currently selected layout
+    if (this.state.selectedAppearance === 'dark') {
+      if (this.state.selectedLayout === 'classic') {
+        if (classicLight) classicLight.classList.add('hidden');
+        if (classicDark) classicDark.classList.remove('hidden');
+      } else if (this.state.selectedLayout === 'magazine') {
+        if (magazineLight) magazineLight.classList.add('hidden');
+        if (magazineDark) magazineDark.classList.remove('hidden');
+      }
+    }
   }
 }
 
-// Expose functions globally for onclick handlers (minimal global pollution)
-// Use Object.defineProperty to control the global property and prevent pollution
-Object.defineProperty(window, 'selectTemplate', {
-  value: (templateId: string): void => {
-    templateManager.switchTemplate(templateId);
-  },
-  writable: false,
-  configurable: false,
-  enumerable: false
-});
-
-Object.defineProperty(window, 'closeTemplateModal', {
-  value: (): void => {
-    templateManager.closeModal();
-  },
-  writable: false,
-  configurable: false,
-  enumerable: false
-});
 
 // Singleton instance
 export const templateManager = new TemplateManager();

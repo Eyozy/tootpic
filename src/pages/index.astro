@@ -211,7 +211,7 @@ import { Image } from 'astro:assets';
             toggleAccordion(optionsContent, optionsIcon, optionsToggle);
         });
 
-        // Template selection - 使用 templateManager
+        // Template selection - 监听templateSelected事件
         document.addEventListener('templateSelected', (e: any) => {
             if (postData) {
                 updatePreview();
@@ -344,9 +344,11 @@ import { Image } from 'astro:assets';
             const useOriginal = useOriginalPostDataCheckbox.checked;
             const sourcePost = useOriginal && postData.reblog ? postData.reblog : postData;
 
-            // Update template class
-            const currentTemplate = templateManager.getCurrentTemplate();
-            styleAContainer.className = `p-8 w-full h-full hidden flex-col preview-card border rounded-xl template-${currentTemplate}`;
+            // TemplateManager handles updating the template class on the preview card.
+            // Ensure the container is visible if it was hidden.
+            if (styleAContainer.classList.contains('hidden')) {
+                styleAContainer.classList.remove('hidden');
+            }
 
             let content = sourcePost.content;
             const tempDiv = document.createElement('div');
@@ -617,6 +619,34 @@ import { Image } from 'astro:assets';
         }
 
         .template-dark #bottom-section {
+            border-color: #4a5568 !important;
+        }
+
+        .template-magazine-dark {
+            background: #2d3748;
+            border-color: #4a5568;
+            color: #ffffff;
+            font-family: 'Georgia', 'Times New Roman', serif; /* Keep magazine font */
+        }
+
+        .template-magazine-dark .text-primary {
+            color: #ffffff !important;
+        }
+
+        .template-magazine-dark .text-secondary {
+            color: #cccccc !important;
+        }
+
+        .template-magazine-dark img {
+            border: none !important;
+        }
+
+        .template-magazine-dark #style-a-attachment {
+            background: #374151 !important;
+            border-color: #4a5568 !important;
+        }
+
+        .template-magazine-dark #bottom-section {
             border-color: #4a5568 !important;
         }
 
