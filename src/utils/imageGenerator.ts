@@ -4,6 +4,7 @@
 
 import { domCache } from './domCache';
 import { templateManager } from './templateManager';
+import { resourceLoader } from './resourceLoader';
 import { API_CONFIG, IMAGE_CONFIG } from '../constants';
 import { toPng } from 'html-to-image';
 
@@ -42,21 +43,17 @@ export class ImageGenerator {
     try {
       this.setDownloadButtonState('Preparing...');
 
-      // Create cloned element for image generation
       const clone = this.createPreviewClone(originalNode);
       const container = this.createTempContainer(clone);
 
-      // Wait for images to fully load
       await this.waitForImages(container);
 
-      // Generate image
       const dataUrl = await this.generateImage(container, clone, {
         quality,
         pixelRatio,
         backgroundColor,
       });
 
-      // Download image
       this.downloadImage(dataUrl);
 
     } catch (error) {
@@ -68,26 +65,19 @@ export class ImageGenerator {
     }
   }
 
-  /**
-   * Create a clone of the preview element
-   */
   private createPreviewClone(originalNode: Element): HTMLElement {
     const clone = originalNode.cloneNode(true) as HTMLElement;
 
-    // Remove preview card borders only, keep other styles
     clone.classList.remove('preview-card', 'border', 'rounded-xl');
 
-    // Set fixed width, auto height
     clone.style.width = `${IMAGE_CONFIG.MAX_WIDTH}px`;
     clone.style.maxWidth = `${IMAGE_CONFIG.MAX_WIDTH}px`;
     clone.style.minWidth = `${IMAGE_CONFIG.MAX_WIDTH}px`;
 
-    // Auto height for content
     clone.style.height = 'auto';
     clone.style.minHeight = 'auto';
     clone.style.maxHeight = 'none';
 
-    // Ensure content displays correctly
     clone.style.display = 'flex';
     clone.style.flexDirection = 'column';
     clone.style.visibility = 'visible';
@@ -96,20 +86,17 @@ export class ImageGenerator {
     return clone;
   }
 
-  /**
-   * Create temporary container for image generation
-   */
   private createTempContainer(clone: HTMLElement): HTMLElement {
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-10000px';
     container.style.top = '-10000px';
-    container.style.width = `${IMAGE_CONFIG.MAX_WIDTH}px`; 
-    container.style.height = 'auto'; // Auto height for content
-    container.style.minHeight = 'auto'; // No minimum height set
+    container.style.width = `${IMAGE_CONFIG.MAX_WIDTH}px`;
+    container.style.height = 'auto';
+    container.style.minHeight = 'auto';
     container.style.zIndex = '-9999';
     container.style.backgroundColor = templateManager.getTemplateBackgroundColor();
-    container.style.padding = '0'; 
+    container.style.padding = '0';
     container.style.boxSizing = 'border-box';
     container.appendChild(clone);
     document.body.appendChild(container);
@@ -117,9 +104,6 @@ export class ImageGenerator {
     return container;
   }
 
-  /**
-   * Generate image from DOM element
-   */
   private async generateImage(
     container: HTMLElement,
     clone: HTMLElement,
@@ -131,7 +115,6 @@ export class ImageGenerator {
   ): Promise<string> {
     this.setDownloadButtonState('Generating...');
 
-    // Wait for a short time to ensure complete layout rendering
     await new Promise(resolve => setTimeout(resolve, 100));
 
     const dataUrl = await toPng(clone, {
@@ -140,14 +123,11 @@ export class ImageGenerator {
       cacheBust: true,
       backgroundColor: options.backgroundColor,
       width: IMAGE_CONFIG.MAX_WIDTH,
-      // Keep 670px width, increase PPI through pixelRatio
-      // Do not set height, let content adapt height
       style: {
         transform: 'scale(1)',
         transformOrigin: 'top left',
       },
       filter: (node: Node) => {
-        // Filter out elements that might cause issues
         return node.nodeName !== 'SCRIPT';
       },
     });
@@ -155,9 +135,6 @@ export class ImageGenerator {
     return dataUrl;
   }
 
-  /**
-   * Download image with filename
-   */
   private downloadImage(dataUrl: string): void {
     const link = document.createElement('a');
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
@@ -166,62 +143,73 @@ export class ImageGenerator {
     link.click();
   }
 
-  /**
-   * Set download button state
-   */
   private setDownloadButtonState(text: string): void {
     if (this.downloadBtn) {
       this.downloadBtn.disabled = true;
       this.downloadBtn.textContent = text;
     }
-  }
 
-  /**
-   * Reset download button
-   */
-  private resetDownloadButton(): void {
-    if (this.downloadBtn) {
-      this.downloadBtn.disabled = false;
-      this.downloadBtn.textContent = 'Download';
+    const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
+    if (previewStatus) {
+      previewStatus.textContent = text;
+      previewStatus.className = 'text-sm text-blue-600';
     }
   }
 
-  /**
-   * Show error message
-   */
-  private showError(message: string): void {
-    // You can implement a toast notification or error display here
-    console.error(message);
-    alert(message); // Fallback for now
+  private resetDownloadButton(): void {
+    if (this.downloadBtn) {
+      this.downloadBtn.disabled = false;
+      this.downloadBtn.textContent = 'Download Image';
+    }
+
+    const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
+    if (previewStatus) {
+      previewStatus.textContent = 'Preview loaded successfully';
+      previewStatus.className = 'text-sm text-green-600';
+    }
   }
 
-  /**
-   * Wait for all images to load
-   */
+  private showError(message: string): void {
+    console.error(message);
+    alert(message);
+  }
+
   private async waitForImages(container: HTMLElement): Promise<void> {
     const images = container.querySelectorAll('img');
+    const corsProxy = resourceLoader.getCorsProxy();
+
     const imagePromises = Array.from(images).map(img => {
       return new Promise<void>((resolve) => {
-        if (img.complete) {
+        const imgElement = img as HTMLImageElement;
+        const originalUrl = this.extractOriginalUrl(imgElement.src, corsProxy);
+
+        if (resourceLoader.isImageCached(originalUrl)) {
+          resolve();
+          return;
+        }
+
+        if (imgElement.complete) {
           resolve();
         } else {
-          img.onload = () => resolve();
-          img.onerror = () => resolve(); // Continue even if loading fails
-          // Set timeout to avoid infinite waiting
-          setTimeout(() => resolve(), 3000);
+          imgElement.onload = () => resolve();
+          imgElement.onerror = () => resolve();
+          setTimeout(() => resolve(), 2000);
         }
       });
     });
 
     await Promise.all(imagePromises);
 
-    // Additional wait to ensure rendering completion
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
-  /**
-   * Cleanup temporary elements
-   */
+  private extractOriginalUrl(proxiedUrl: string, corsProxy: string): string {
+    if (proxiedUrl.startsWith(corsProxy)) {
+      return proxiedUrl.substring(corsProxy.length);
+    }
+    return proxiedUrl;
+  }
+
   private cleanup(): void {
     const tempContainers = document.querySelectorAll('[style*="z-index: -9999"]');
     tempContainers.forEach(container => {
@@ -231,13 +219,9 @@ export class ImageGenerator {
     });
   }
 
-  /**
-   * Destroy generator
-   */
   destroy(): void {
     this.downloadBtn = null;
   }
 }
 
-// Singleton instance
 export const imageGenerator = new ImageGenerator();

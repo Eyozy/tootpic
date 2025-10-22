@@ -7,7 +7,7 @@
 export const TEMPLATE_NAMES = {
   classic: 'Classic',
   magazine: 'Magazine',
-  dark: 'Classic (Dark)', // Modified to Classic (Dark)
+  dark: 'Classic (Dark)',
   'magazine-dark': 'Magazine (Dark)',
 } as const;
 
@@ -21,7 +21,6 @@ export const API_CONFIG = {
   IMAGE_PIXEL_RATIO: 3, // Set to 3x for ultra-high quality images
 } as const;
 
-
 // Image generation configuration
 export const IMAGE_CONFIG = {
   MAX_WIDTH: 670,
@@ -30,6 +29,6 @@ export const IMAGE_CONFIG = {
     classic: '#ffffff',
     magazine: '#faf8f5',
     dark: '#2d3748',
-    'magazine-dark': '#2d3748', // Add background for magazine-dark
+    'magazine-dark': '#2d3748',
   },
 } as const;

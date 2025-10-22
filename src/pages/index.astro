@@ -4,6 +4,7 @@ import TemplateSelector from '../components/TemplateSelector.astro';
 import { templateManager } from '../utils/templateManager';
 import { imageGenerator } from '../utils/imageGenerator';
 import { domCache } from '../utils/domCache';
+import { resourceLoader } from '../utils/resourceLoader';
 import { API_CONFIG, DEFAULT_TEMPLATE_ID } from '../constants';
 import { Image } from 'astro:assets';
 ---
@@ -30,7 +31,12 @@ import { Image } from 'astro:assets';
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                     </svg>
                 </div>
-                <input type="url" name="mastodon-url" id="mastodon-url" placeholder="https://mastodon.social/@user/123..." class="w-full pl-12 pr-5 py-3 border border-brand-gray-300 rounded-lg bg-white shadow-sm transition focus:outline-none focus:ring-0 focus:border-brand-blue" autocomplete="url" aria-required="true">
+                <input type="url" name="mastodon-url" id="mastodon-url" placeholder="https://mastodon.social/@user/123456789..." class="w-full pl-12 pr-12 py-3 border border-brand-gray-300 rounded-lg bg-white shadow-sm transition focus:outline-none focus:ring-0 focus:border-brand-blue" autocomplete="url" aria-required="true">
+                <button id="clear-url-btn" class="absolute inset-y-0 right-0 pr-4 items-center hidden" aria-label="Clear URL">
+                    <svg class="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
             </div>
             <button id="generate-btn" class="w-full bg-brand-blue text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-blue-dark transition-all shadow-sm hover:shadow-md disabled:bg-brand-gray-400 disabled:cursor-not-allowed">
                 Generate Preview
@@ -76,12 +82,12 @@ import { Image } from 'astro:assets';
                                 <span class="sr-only">Toggle timestamp visibility</span>
                             </label>
                         </div>
-                        <div class="flex items-center justify-between">
-                            <label for="username-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Username</label>
-                            <label for="username-toggle" class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="visibility" id="username-toggle" value="username" class="sr-only peer" checked>
+                        <div class="flex items-center justify-between" id="instance-toggle-container">
+                            <label for="instance-toggle" class="text-brand-gray-700 cursor-pointer pr-4">Show Instance Name</label>
+                            <label for="instance-toggle" class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="visibility" id="instance-toggle" value="instance" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
-                                <span class="sr-only">Toggle username visibility</span>
+                                <span class="sr-only">Toggle instance name visibility</span>
                             </label>
                         </div>
                         <div class="flex items-center justify-between">
@@ -158,12 +164,12 @@ import { Image } from 'astro:assets';
     import { templateManager } from '../utils/templateManager';
     import { imageGenerator } from '../utils/imageGenerator';
     import { domCache } from '../utils/domCache';
+    import { resourceLoader } from '../utils/resourceLoader';
     import { TEMPLATE_NAMES } from '../constants';
 
     declare var htmlToImage: any;
 
     document.addEventListener('DOMContentLoaded', () => {
-        // 使用 DOM 缓存获取元素
         const urlInput = domCache.getElement('mastodon-url') as HTMLInputElement;
         const generateBtn = domCache.getElement('generate-btn') as HTMLButtonElement;
         const downloadBtn = domCache.getElement('download-btn') as HTMLButtonElement;
@@ -171,15 +177,14 @@ import { Image } from 'astro:assets';
         const previewArea = domCache.getElement('preview-area') as HTMLDivElement;
         const loader = domCache.getElement('loader') as HTMLDivElement;
         const styleAContainer = domCache.getElement('style-a-container') as HTMLDivElement;
+        const clearUrlBtn = domCache.getElement('clear-url-btn') as HTMLButtonElement;
 
-        // Options
         const visibilityCheckboxes = document.querySelectorAll<HTMLInputElement>('input[name="visibility"]');
         const useOriginalPostDataCheckbox = domCache.getElement('use-original-post-data') as HTMLInputElement;
+        const instanceToggleContainer = domCache.getElement('instance-toggle-container') as HTMLDivElement;
 
-        // Template selector
         const templateToggle = domCache.getElement('template-toggle') as HTMLButtonElement;
 
-        // Options accordion
         const optionsToggle = domCache.getElement('options-toggle') as HTMLButtonElement;
         const optionsContent = domCache.getElement('options-content') as HTMLDivElement;
         const optionsIcon = domCache.getElement('options-icon') as SVGElement;
@@ -189,11 +194,39 @@ import { Image } from 'astro:assets';
         let visibility = {
             stats: true,
             timestamp: true,
-            username: true,
+            instance: true,
         };
 
-        // Event listeners
+        let currentLoadController: AbortController | null = null;
+
         generateBtn?.addEventListener('click', fetchMastodonPost);
+
+        urlInput?.addEventListener('input', toggleClearButtonVisibility);
+        urlInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && currentLoadController) {
+                cancelCurrentLoad();
+            }
+        });
+        clearUrlBtn?.addEventListener('click', clearUrlInput);
+
+        function cancelCurrentLoad() {
+            if (currentLoadController) {
+                currentLoadController.abort();
+                currentLoadController = null;
+
+                if (generateBtn) {
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Generate Preview';
+                }
+
+                if (previewStatus) {
+                    previewStatus.textContent = 'Loading cancelled';
+                    previewStatus.className = 'text-sm text-gray-600';
+                }
+
+                resourceLoader.clearCache();
+            }
+        }
         downloadBtn?.addEventListener('click', async () => {
             try {
                 await imageGenerator.generateAndDownload();
@@ -211,21 +244,18 @@ import { Image } from 'astro:assets';
             toggleAccordion(optionsContent, optionsIcon, optionsToggle);
         });
 
-        // Template selection - 监听templateSelected事件
         document.addEventListener('templateSelected', (e: any) => {
             if (postData) {
                 updatePreview();
             }
         });
 
-        // 初始化模板管理器
         try {
             templateManager.switchTemplate(templateManager.getCurrentTemplate());
         } catch (error) {
             console.error('Error initializing template manager:', error);
         }
 
-        // Options change listeners
         const allCheckboxes = [...visibilityCheckboxes, useOriginalPostDataCheckbox].filter(cb => cb !== null) as HTMLInputElement[];
         allCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
@@ -248,8 +278,6 @@ import { Image } from 'astro:assets';
                 content.classList.toggle('hidden');
             }
         }
-
-        // updateTemplateName 函数现在由 templateManager 处理，无需重复实现
 
         function setPreviewState(state: 'loading' | 'content' | 'error') {
             if (loader) loader.classList.add('hidden');
@@ -321,6 +349,11 @@ import { Image } from 'astro:assets';
             setGenerateButtonState(true);
             setPreviewState('loading');
 
+            if (previewStatus) {
+                previewStatus.textContent = 'Loading... (Press ESC to cancel)';
+                previewStatus.className = 'text-sm text-blue-600';
+            }
+
             try {
                 const response = await fetch(apiUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 if (!response.ok) {
@@ -328,13 +361,80 @@ import { Image } from 'astro:assets';
                     throw new Error(`Network error: ${response.statusText}`);
                 }
                 postData = await response.json();
+
+                const imageResources = resourceLoader.extractImageResources(postData);
+
+                if (imageResources.length > 0) {
+                    if (previewStatus) {
+                        previewStatus.textContent = 'Loading images...';
+                        previewStatus.className = 'text-sm text-blue-600';
+                    }
+
+                    try {
+                        await resourceLoader.preloadImages(imageResources, {
+                            timeout: 8000,
+                            retryAttempts: 2,
+                            retryDelay: 1000,
+                            onProgress: (progress) => {
+                                const statusText = `Loading images: ${progress.loaded}/${progress.total} (${progress.percentage}%)`;
+                                if (previewStatus) previewStatus.textContent = statusText;
+                            },
+                            onResourceLoaded: (resource) => {
+                                console.log(`Loaded ${resource.type}: ${resource.url}`);
+                            },
+                            onResourceFailed: (resource, error) => {
+                                console.warn(`Failed to load ${resource.type}: ${resource.url}`, error);
+                            }
+                        });
+
+                        const cacheStats = resourceLoader.getCacheStats();
+                        const successRate = Math.round((cacheStats.size / imageResources.length) * 100);
+
+                        if (successRate < 50) {
+                            console.warn(`Low image loading success rate: ${successRate}%`);
+                        }
+
+                    } catch (preloadError) {
+                        console.error('Image preloading failed:', preloadError);
+                        if (previewStatus) {
+                            previewStatus.textContent = 'Some images failed to load, continuing...';
+                            previewStatus.className = 'text-sm text-yellow-600';
+                        }
+                    }
+                } else {
+                    if (previewStatus) {
+                        previewStatus.textContent = 'Processing content...';
+                        previewStatus.className = 'text-sm text-blue-600';
+                    }
+                }
+
                 updatePreview();
+
                 if (downloadBtn) downloadBtn.disabled = false;
+
             } catch (error) {
                 showError(error instanceof Error ? error.message : 'An unknown error occurred');
                 postData = null;
             } finally {
                 setGenerateButtonState(false);
+            }
+        }
+
+        function toggleClearButtonVisibility() {
+            if (urlInput && clearUrlBtn) {
+                if (urlInput.value.trim().length > 0) {
+                    clearUrlBtn.classList.remove('hidden');
+                } else {
+                    clearUrlBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        function clearUrlInput() {
+            if (urlInput) {
+                urlInput.value = '';
+                toggleClearButtonVisibility();
+                urlInput.focus();
             }
         }
 
@@ -344,11 +444,13 @@ import { Image } from 'astro:assets';
             const useOriginal = useOriginalPostDataCheckbox.checked;
             const sourcePost = useOriginal && postData.reblog ? postData.reblog : postData;
 
-            // TemplateManager handles updating the template class on the preview card.
-            // Ensure the container is visible if it was hidden.
             if (styleAContainer.classList.contains('hidden')) {
                 styleAContainer.classList.remove('hidden');
             }
+
+            const corsProxy = 'https://cors.eu.org/';
+
+            const fragment = document.createDocumentFragment();
 
             let content = sourcePost.content;
             const tempDiv = document.createElement('div');
@@ -361,27 +463,38 @@ import { Image } from 'astro:assets';
             });
             content = tempDiv.innerHTML;
 
-            const corsProxy = 'https://cors.eu.org/';
-
-            // Process emojis
             if (sourcePost.emojis) {
                 sourcePost.emojis.forEach(emoji => {
                     const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
                     const proxiedUrl = `${corsProxy}${emoji.url}`;
-                    content = content.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+
+                    if (resourceLoader.isImageCached(emoji.url)) {
+                        content = content.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+                    } else {
+                        content = content.replace(regex, `:${emoji.shortcode}:`);
+                    }
                 });
             }
 
-            // Format date and time
             const date = new Date(sourcePost.created_at);
             const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-            // Update avatar
-            const avatarEl = document.getElementById('style-a-avatar') as HTMLImageElement | null;
-            if (avatarEl) avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
+            const updates: Array<() => void> = [];
 
-            // Update display name with emojis
+            const avatarEl = document.getElementById('style-a-avatar') as HTMLImageElement | null;
+            if (avatarEl) {
+                if (resourceLoader.isImageCached(sourcePost.account.avatar)) {
+                    updates.push(() => {
+                        avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
+                    });
+                } else {
+                    updates.push(() => {
+                        avatarEl.src = '/favicon.svg';
+                    });
+                }
+            }
+
             const displayNameEl = document.getElementById('style-a-display-name') as HTMLDivElement | null;
             if (displayNameEl) {
                 let displayName = sourcePost.account.display_name;
@@ -389,34 +502,53 @@ import { Image } from 'astro:assets';
                     sourcePost.account.emojis.forEach(emoji => {
                         const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
                         const proxiedUrl = `${corsProxy}${emoji.url}`;
-                        displayName = displayName.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+
+                        if (resourceLoader.isImageCached(emoji.url)) {
+                            displayName = displayName.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
+                        } else {
+                            displayName = displayName.replace(regex, `:${emoji.shortcode}:`);
+                        }
                     });
                 }
-                displayNameEl.innerHTML = displayName;
+                updates.push(() => {
+                    displayNameEl.innerHTML = displayName;
+                });
             }
 
-            // Update username
             const usernameEl = document.getElementById('style-a-username') as HTMLDivElement | null;
             if (usernameEl) {
                 let fullAcct = sourcePost.account.acct;
                 if (!fullAcct.includes('@')) {
                     try {
                         const userProfileUrl = new URL(sourcePost.account.url);
-                        fullAcct = `${fullAcct}@${userProfileUrl.hostname}`;
+                        fullAcct = `${userProfileUrl.hostname}`;
                     } catch(e) { /* Do nothing, use acct as is */ }
                 }
-                usernameEl.textContent = `@${fullAcct}`;
-                usernameEl.style.display = visibility.username ? 'block' : 'none';
+
+                let displayUsername = '';
+                if (visibility.instance) {
+                    displayUsername = `@${fullAcct}`;
+                } else {
+                    displayUsername = `@${fullAcct.split('@')[0]}`;
+                }
+
+                updates.push(() => {
+                    usernameEl.textContent = displayUsername;
+                    usernameEl.style.display = 'block';
+                });
             }
 
-            // Update content
             const contentEl = document.getElementById('style-a-content') as HTMLDivElement | null;
-            if (contentEl) contentEl.innerHTML = content;
+            if (contentEl) {
+                updates.push(() => {
+                    contentEl.innerHTML = content;
+                });
+            }
 
-            // Update media attachments
+            updates.forEach(update => update());
+
             updateMediaAttachments(sourcePost.media_attachments);
 
-            // Update timestamp and stats
             updateFooterSection(sourcePost, visibility, formattedTime, formattedDate);
 
             setPreviewState('content');
@@ -435,7 +567,6 @@ import { Image } from 'astro:assets';
 
                 const attachmentsToDisplay = mediaAttachments.slice(0, 4);
 
-                // Calculate grid layout
                 switch (attachmentsToDisplay.length) {
                     case 1:
                         attachmentContainer.style.gridTemplateColumns = '1fr';
@@ -452,25 +583,43 @@ import { Image } from 'astro:assets';
                 }
 
                 const corsProxy = 'https://cors.eu.org/';
+
+                const fragment = document.createDocumentFragment();
+
                 attachmentsToDisplay.forEach((attachment: any, index: number) => {
                     const imgWrapper = document.createElement('div');
                     imgWrapper.className = 'overflow-hidden relative';
 
-                    const img = document.createElement('img');
-                    img.crossOrigin = 'anonymous';
-                    img.alt = attachment.description || `Post attachment ${index + 1}`;
-                    img.className = 'w-full h-full object-cover';
-
+                    let imageUrl: string;
                     if (attachment.type === 'image') {
-                        img.src = `${corsProxy}${attachment.url}`;
+                        imageUrl = attachment.url;
                     } else {
-                        const imageUrl = attachment.preview_url || attachment.url;
-                        img.src = `${corsProxy}${imageUrl}`;
+                        imageUrl = attachment.preview_url || attachment.url;
                     }
 
-                    imgWrapper.appendChild(img);
+                    const isImagePreloaded = resourceLoader.isImageCached(imageUrl);
 
-                    // Add indicators for GIF and Video
+                    if (isImagePreloaded) {
+                        const img = document.createElement('img');
+                        img.crossOrigin = 'anonymous';
+                        img.alt = attachment.description || `Post attachment ${index + 1}`;
+                        img.className = 'w-full h-full object-cover';
+                        img.src = `${corsProxy}${imageUrl}`;
+                        imgWrapper.appendChild(img);
+                    } else {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500';
+                        placeholder.innerHTML = `
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                <p class="text-xs">Image not available</p>
+                            </div>
+                        `;
+                        imgWrapper.appendChild(placeholder);
+                    }
+
                     if (attachment.type === 'gifv') {
                         const gifIndicator = document.createElement('div');
                         gifIndicator.className = 'absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded';
@@ -488,13 +637,14 @@ import { Image } from 'astro:assets';
                         imgWrapper.appendChild(videoIndicator);
                     }
 
-                    // Special handling for 3 attachments
                     if (attachmentsToDisplay.length === 3 && index === 0) {
                         imgWrapper.style.gridRow = 'span 2 / span 2';
                     }
 
-                    attachmentContainer.appendChild(imgWrapper);
+                    fragment.appendChild(imgWrapper);
                 });
+
+                attachmentContainer.appendChild(fragment);
             } else {
                 attachmentContainer.style.display = 'none';
             }
@@ -508,6 +658,7 @@ import { Image } from 'astro:assets';
             if (timestampEl) {
                 timestampEl.textContent = `${formattedTime} · ${formattedDate}`;
                 timestampEl.style.display = visibility.timestamp ? 'block' : 'none';
+                timestampEl.style.marginBottom = (visibility.timestamp && visibility.stats) ? '0.75rem' : '0';
             }
 
             const repliesEl = document.getElementById('style-a-replies') as HTMLSpanElement | null;
@@ -526,12 +677,17 @@ import { Image } from 'astro:assets';
             if (bottomSection) {
                 bottomSection.style.display = shouldShowBottomSection ? 'block' : 'none';
                 bottomSection.style.borderTopWidth = shouldShowBottomSection ? '1px' : '0';
+                bottomSection.style.paddingTop = shouldShowBottomSection ? '1rem' : '0';
+
+                if (!visibility.timestamp && !visibility.stats) {
+                    bottomSection.style.paddingTop = '0';
+                    bottomSection.style.borderTopWidth = '0';
+                } else if (!visibility.timestamp && visibility.stats) {
+                    bottomSection.style.paddingTop = '1rem';
+                }
             }
         }
 
-        // downloadImage 函数现在由 imageGenerator 类处理，无需重复实现
-
-        // Load html-to-image library when user focuses on input
         urlInput?.addEventListener('focus', () => {
             if (typeof htmlToImage === 'undefined') {
                 const script = document.createElement('script');
@@ -550,7 +706,6 @@ import { Image } from 'astro:assets';
             transform: rotate(180deg);
         }
 
-        /* Accordion animations */
         .accordion-content {
             transition: all 0.3s ease-in-out;
             transform-origin: top;
@@ -583,7 +738,6 @@ import { Image } from 'astro:assets';
             100% { transform: rotate(360deg); }
         }
 
-        /* Template styles */
         .template-classic {
             background: white;
             border-color: #e5e7eb;
@@ -626,7 +780,7 @@ import { Image } from 'astro:assets';
             background: #2d3748;
             border-color: #4a5568;
             color: #ffffff;
-            font-family: 'Georgia', 'Times New Roman', serif; /* Keep magazine font */
+            font-family: 'Georgia', 'Times New Roman', serif;
         }
 
         .template-magazine-dark .text-primary {
@@ -650,7 +804,6 @@ import { Image } from 'astro:assets';
             border-color: #4a5568 !important;
         }
 
-        /* Custom emoji styles */
         .custom-emoji {
             width: 16px;
             height: 16px;
@@ -658,7 +811,6 @@ import { Image } from 'astro:assets';
             margin: 0 1px;
         }
 
-        /* Consistent border radius for images */
         #style-a-avatar {
             border-radius: 8px;
         }
@@ -667,7 +819,6 @@ import { Image } from 'astro:assets';
             border-radius: 8px;
         }
 
-        /* Media attachments - consistent border radius */
         #style-a-attachment img {
             border-radius: 8px;
         }
@@ -676,7 +827,6 @@ import { Image } from 'astro:assets';
             border-radius: 8px;
         }
 
-        /* Responsive design */
         @media (max-width: 768px) {
             .preview-card {
                 padding: 1rem;
