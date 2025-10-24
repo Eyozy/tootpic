@@ -190,12 +190,13 @@ import { Image } from 'astro:assets';
         const optionsIcon = domCache.getElement('options-icon') as SVGElement;
         const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
 
-        let postData: any = null;
-        let visibility = {
-            stats: true,
-            timestamp: true,
-            instance: true,
-        };
+let postData: any = null;
+let fetchedInstance = '';
+let visibility = {
+    stats: true,
+    timestamp: true,
+    instance: true,
+};
 
         let currentLoadController: AbortController | null = null;
 
@@ -343,6 +344,7 @@ import { Image } from 'astro:assets';
             }
 
             const { instance, id } = match;
+            fetchedInstance = instance;
             const apiUrl = `https://cors.eu.org/https://${instance}/api/v1/statuses/${id}`;
 
             if (previewArea) previewArea.classList.remove('hidden');
@@ -518,20 +520,12 @@ import { Image } from 'astro:assets';
             const usernameEl = document.getElementById('style-a-username') as HTMLDivElement | null;
             if (usernameEl) {
                 let fullAcct = sourcePost.account.acct;
-                if (!fullAcct.includes('@')) {
-                    try {
-                        const userProfileUrl = new URL(sourcePost.account.url);
-                        fullAcct = `${userProfileUrl.hostname}`;
-                    } catch(e) { /* Do nothing, use acct as is */ }
+                let usernamePart = fullAcct.includes('@') ? fullAcct.split('@')[0] : fullAcct;
+                let instancePart = fullAcct.includes('@') ? fullAcct.split('@').slice(1).join('@') : fetchedInstance;
+                let displayUsername = `@${usernamePart}`;
+                if (visibility.instance && instancePart) {
+                    displayUsername += `@${instancePart}`;
                 }
-
-                let displayUsername = '';
-                if (visibility.instance) {
-                    displayUsername = `@${fullAcct}`;
-                } else {
-                    displayUsername = `@${fullAcct.split('@')[0]}`;
-                }
-
                 updates.push(() => {
                     usernameEl.textContent = displayUsername;
                     usernameEl.style.display = 'block';
