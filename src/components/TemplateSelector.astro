@@ -12,7 +12,7 @@ const { selectedTemplateId = 'classic' } = Astro.props;
   <div class="modal-content">
     <div class="modal-header">
       <h2 id="modal-title" class="modal-title">Choose Template</h2>
-      <button type="button" class="modal-close" aria-label="Close modal">
+      <button type="button" id="modal-close" class="modal-close" aria-label="Close modal">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
         </svg>
@@ -183,12 +183,12 @@ const { selectedTemplateId = 'classic' } = Astro.props;
         <div class="section-title">Appearance</div>
         <div class="appearance-options">
           <label class="appearance-option">
-            <input type="radio" name="appearance" value="light" checked>
+            <input type="radio" id="appearance-light" name="appearance" value="light" checked>
             <span class="appearance-radio"></span>
             <span class="appearance-label">Light</span>
           </label>
           <label class="appearance-option">
-            <input type="radio" name="appearance" value="dark">
+            <input type="radio" id="appearance-dark" name="appearance" value="dark">
             <span class="appearance-radio"></span>
             <span class="appearance-label">Dark</span>
           </label>

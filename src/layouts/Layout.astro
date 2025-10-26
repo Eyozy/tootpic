@@ -13,7 +13,7 @@
     <meta property="og:url" content="https://tootpic.vercel.app/">
     <meta property="og:title" content="TootPic - Mastodon Post to Image Converter">
     <meta property="og:description" content="Convert Mastodon posts into beautiful, shareable images. Generate high-quality screenshots with one click, perfect for social media sharing.">
-    <meta property="og:image" content="/og.png">
+    <meta property="og:image" content="https://tootpic.vercel.app/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:locale" content="en_US">
@@ -23,7 +23,7 @@
     <meta property="twitter:url" content="https://tootpic.vercel.app/">
     <meta property="twitter:title" content="TootPic - Mastodon Post to Image Converter">
     <meta property="twitter:description" content="Convert Mastodon posts into beautiful, shareable images. Generate high-quality screenshots with one click, perfect for social media sharing.">
-    <meta property="twitter:image" content="/og.png">
+    <meta property="twitter:image" content="https://tootpic.vercel.app/og.png">
 
     <!-- Additional SEO -->
     <meta name="robots" content="index, follow">
@@ -92,6 +92,7 @@
             </a>
         </span>
     </footer>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </body>
 </html>
 <style is:global>
@@ -147,8 +148,17 @@
     .content-container a.mention,
     .content-container a.hashtag,
     .content-container a.url {
-        color: #2563eb; /* Tailwind's blue-600 - better contrast */
-        text-decoration: none;
+        color: #1d4ed8; /* Tailwind's blue-700 - better contrast */
+        text-decoration: underline;
+    }
+
+    .content-container a.url:focus {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+    }
+
+    input::placeholder {
+        color: #6b7280;
     }
 
     .loader {

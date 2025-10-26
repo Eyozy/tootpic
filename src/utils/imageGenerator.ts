@@ -115,7 +115,7 @@ export class ImageGenerator {
   ): Promise<string> {
     this.setDownloadButtonState('Generating...');
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+
 
     const dataUrl = await toPng(clone, {
       quality: options.quality,
@@ -193,14 +193,14 @@ export class ImageGenerator {
         } else {
           imgElement.onload = () => resolve();
           imgElement.onerror = () => resolve();
-          setTimeout(() => resolve(), 2000);
+          setTimeout(() => resolve(), 500);
         }
       });
     });
 
     await Promise.all(imagePromises);
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+
   }
 
   private extractOriginalUrl(proxiedUrl: string, corsProxy: string): string {
