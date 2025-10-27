@@ -57,8 +57,19 @@ export class ImageGenerator {
       this.downloadImage(dataUrl);
 
     } catch (error) {
-      console.error('Image generation failed:', error);
-      this.showError('Image generation failed. Please try again.');
+      console.error('Detailed image generation error:', error);
+      // More specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('cssRules') || error.message.includes('CSSStyleSheet')) {
+          this.showError('CSS loading issue. Please refresh and try again.');
+        } else if (error.message.includes('timeout') || error.message.includes('failed to load')) {
+          this.showError('Resource loading failed. Check your connection and try again.');
+        } else {
+          this.showError('Image generation failed. Please try again.');
+        }
+      } else {
+        this.showError('Image generation failed. Please try again.');
+      }
     } finally {
       this.resetDownloadButton();
       this.cleanup();
@@ -104,6 +115,109 @@ export class ImageGenerator {
     return container;
   }
 
+  private async inlineInterCSS(clone: HTMLElement): Promise<void> {
+    try {
+      // Use multiple reliable CDN sources as fallback
+      const cssSources = [
+        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
+        'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.17/css/inter.min.css',
+        'https://unpkg.com/@fontsource/inter@5.0.17/css/inter.min.css'
+      ];
+
+      let cssText = '';
+      let loaded = false;
+
+      for (const cssUrl of cssSources) {
+        try {
+          const response = await fetch(cssUrl, {
+            mode: 'cors',
+            credentials: 'omit'
+          });
+          
+          if (response.ok) {
+            cssText = await response.text();
+            loaded = true;
+            break;
+          }
+        } catch (e) {
+          console.warn(`Failed to load CSS from ${cssUrl}:`, e);
+          continue;
+        }
+      }
+
+      if (!loaded || !cssText) {
+        console.warn('All CSS sources failed, using fallback Inter font stack');
+        return;
+      }
+
+      // Create style element and inject CSS
+      const style = document.createElement('style');
+      style.textContent = cssText;
+      style.setAttribute('data-inter-inline', 'true');
+      (clone.ownerDocument || document).head.appendChild(style);
+
+      // Remove conflicting existing Inter links
+      const existingLinks = (clone.ownerDocument || document).querySelectorAll('link[href*="inter"], link[href*="Inter"], link[href*="fonts.googleapis"]');
+      existingLinks.forEach(link => link.remove());
+
+    } catch (error) {
+      console.error('Failed to inline Inter CSS:', error);
+      // Don't throw error, continue execution - use system font as fallback
+    }
+  }
+
+  private async replaceBrokenImages(clone: HTMLElement): Promise<void> {
+    const images = clone.querySelectorAll('img');
+    const fallbackSrc = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDUiIGhlaWdodD0iNDUiIHZpZXdCb3g9IjAgMCA0NSA0NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjIyLjUiIGZpbGw9IiM5Q0FiQjIiLz4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjE4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4='; // Better looking default avatar placeholder
+
+    const replacements = Array.from(images).map(img => {
+      return new Promise<void>((resolve) => {
+        const imgElement = img as HTMLImageElement;
+
+        // Skip images that are already data URLs or SVG placeholders
+        if (imgElement.src.startsWith('data:') || imgElement.src.includes('PHN2ZyB3aWR0aD0iNDU')) {
+          resolve();
+          return;
+        }
+
+        // Handle proxy URLs
+        let originalUrl = imgElement.src;
+        if (originalUrl.includes('corsproxy.io')) {
+          const urlParts = originalUrl.split('corsproxy.io/?');
+          if (urlParts.length > 1) {
+            originalUrl = decodeURIComponent(urlParts[1]);
+          }
+        } else if (originalUrl.includes('cors.eu.org')) {
+          originalUrl = originalUrl.replace('https://cors.eu.org/', '');
+        }
+
+        // Test if the image can be loaded
+        const testImg = new Image();
+        testImg.crossOrigin = 'anonymous';
+
+        testImg.onload = () => {
+          // Image loaded successfully, keep original URL
+          resolve();
+        };
+
+        testImg.onerror = () => {
+          // Image failed to load, replace with placeholder
+          console.warn(`Replacing broken image: ${originalUrl}`);
+          imgElement.src = fallbackSrc;
+          
+          // Ensure placeholder displays correctly
+          imgElement.onerror = null; // Prevent infinite loop
+          resolve();
+        };
+
+        // Start loading test by setting image source
+        testImg.src = originalUrl;
+      });
+    });
+
+    await Promise.all(replacements);
+  }
+
   private async generateImage(
     container: HTMLElement,
     clone: HTMLElement,
@@ -115,24 +229,36 @@ export class ImageGenerator {
   ): Promise<string> {
     this.setDownloadButtonState('Generating...');
 
+    try {
+      // Inline Inter CSS first to avoid remote stylesheet issues
+      await this.inlineInterCSS(clone);
 
+      // Replace any broken images before toPng
+      await this.replaceBrokenImages(clone);
 
-    const dataUrl = await toPng(clone, {
-      quality: options.quality,
-      pixelRatio: options.pixelRatio,
-      cacheBust: true,
-      backgroundColor: options.backgroundColor,
-      width: IMAGE_CONFIG.MAX_WIDTH,
-      style: {
-        transform: 'scale(1)',
-        transformOrigin: 'top left',
-      },
-      filter: (node: Node) => {
-        return node.nodeName !== 'SCRIPT';
-      },
-    });
+      const dataUrl = await toPng(clone, {
+        quality: options.quality,
+        pixelRatio: options.pixelRatio,
+        cacheBust: true,
+        backgroundColor: options.backgroundColor,
+        width: IMAGE_CONFIG.MAX_WIDTH,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
+        filter: (node: Node) => {
+          return node.nodeName !== 'SCRIPT';
+        },
+      });
 
-    return dataUrl;
+      return dataUrl;
+    } finally {
+      // Clean up inline styles
+      const inlinedStyle = (clone.ownerDocument || document).querySelector('style[data-inter-inline]');
+      if (inlinedStyle) {
+        inlinedStyle.remove();
+      }
+    }
   }
 
   private downloadImage(dataUrl: string): void {
@@ -179,7 +305,7 @@ export class ImageGenerator {
     const corsProxy = resourceLoader.getCorsProxy();
 
     const imagePromises = Array.from(images).map(img => {
-      return new Promise<void>((resolve) => {
+      return new Promise<void>((resolve, reject) => {
         const imgElement = img as HTMLImageElement;
         const originalUrl = this.extractOriginalUrl(imgElement.src, corsProxy);
 
@@ -188,19 +314,47 @@ export class ImageGenerator {
           return;
         }
 
-        if (imgElement.complete) {
+        if (imgElement.complete && imgElement.naturalHeight !== 0) {
           resolve();
-        } else {
-          imgElement.onload = () => resolve();
-          imgElement.onerror = () => resolve();
-          setTimeout(() => resolve(), 500);
+          return;
         }
+
+        const fallbackSrc = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDUiIGhlaWdodD0iNDUiIHZpZXdCb3g9IjAgMCA0NSA0NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjIyLjUiIGZpbGw9IiM5Q0FiQjIiLz4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjE4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4='; // Better looking default avatar placeholder
+
+        let timeoutId: NodeJS.Timeout;
+
+        const cleanup = () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          imgElement.onload = null;
+          imgElement.onerror = null;
+        };
+
+        imgElement.onload = () => {
+          cleanup();
+          resolve();
+        };
+
+        imgElement.onerror = () => {
+          cleanup();
+          console.warn(`Image failed to load, using fallback: ${originalUrl}`);
+          imgElement.src = fallbackSrc;
+          imgElement.onerror = null; // Prevent infinite loop
+          resolve();
+        };
+
+        // Set timeout to prevent permanent waiting, increased to 10 seconds
+        timeoutId = setTimeout(() => {
+          cleanup();
+          console.warn(`Image loading timeout: ${originalUrl}`);
+          imgElement.src = fallbackSrc;
+          resolve();
+        }, 10000);
       });
     });
 
     await Promise.all(imagePromises);
-
-
   }
 
   private extractOriginalUrl(proxiedUrl: string, corsProxy: string): string {

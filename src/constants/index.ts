@@ -17,6 +17,11 @@ export const DEFAULT_TEMPLATE_ID = 'classic';
 // API configuration
 export const API_CONFIG = {
   CORS_PROXY: 'https://cors.eu.org/',
+  CORS_PROXY_FALLBACKS: [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+    'https://cors-anywhere.herokuapp.com/'
+  ],
   IMAGE_QUALITY: 1,
   IMAGE_PIXEL_RATIO: 3, // Set to 3x for ultra-high quality images
 } as const;

@@ -20,7 +20,7 @@ import { Image } from 'astro:assets';
                 </h1>
             </div>
             <p class="text-base md:text-lg text-brand-gray-600 max-w-xl mx-auto">
-                Transform your Mastodon posts into beautiful, shareable images.
+                Turn your Mastodon posts into beautiful, shareable images.
             </p>
         </header>
 
@@ -280,6 +280,17 @@ import { Image } from 'astro:assets';
             height: 16px;
             vertical-align: middle;
             margin: 0 1px;
+        }
+
+        .content-container {
+            word-break: break-all;
+            overflow-wrap: break-word;
+            white-space: normal;
+            max-width: 100%;
+            box-sizing: border-box;
+            line-height: 1.5;
+            hyphens: auto;
+            line-break: strict;
         }
 
         #style-a-avatar {

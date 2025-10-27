@@ -13,6 +13,8 @@
  * - Support ESC cancellation for long loading operations
  */
 
+import { API_CONFIG } from '../constants';
+
 export interface ImageResource {
   url: string;
   type: 'avatar' | 'emoji' | 'attachment' | 'preview';
@@ -40,9 +42,12 @@ export class ResourceLoader {
   private cache = new Map<string, HTMLImageElement>();
   private loadingPromises = new Map<string, Promise<HTMLImageElement>>();
   private corsProxy: string;
+  private corsProxyFallbacks: string[];
+  private currentProxyIndex: number = 0;
 
-  constructor(corsProxy: string = 'https://cors.eu.org/') {
+  constructor(corsProxy: string = API_CONFIG.CORS_PROXY) {
     this.corsProxy = corsProxy;
+    this.corsProxyFallbacks = [...API_CONFIG.CORS_PROXY_FALLBACKS];
   }
 
   /**
@@ -109,7 +114,7 @@ export class ResourceLoader {
   }
 
   /**
-   * Load single image
+   * Load single image with proxy fallback mechanism
    */
   private async loadSingleImage(resource: ImageResource, options: {
     timeout: number;
@@ -117,25 +122,61 @@ export class ResourceLoader {
     retryDelay: number;
   }): Promise<HTMLImageElement> {
     const { timeout, retryAttempts, retryDelay } = options;
-    const proxiedUrl = `${this.corsProxy}${resource.url}`;
+    
+    // Try all available proxies
+    const allProxies = [this.corsProxy, ...this.corsProxyFallbacks];
+    
+    for (const proxy of allProxies) {
+      try {
+        const proxiedUrl = this.buildProxiedUrl(resource.url, proxy);
+        
+        if (this.cache.has(proxiedUrl)) {
+          return this.cache.get(proxiedUrl)!;
+        }
 
-    if (this.cache.has(proxiedUrl)) {
-      return this.cache.get(proxiedUrl)!;
+        if (this.loadingPromises.has(proxiedUrl)) {
+          return this.loadingPromises.get(proxiedUrl)!;
+        }
+
+        const loadPromise = this.createLoadPromise(proxiedUrl, timeout, retryAttempts, retryDelay);
+        this.loadingPromises.set(proxiedUrl, loadPromise);
+
+        try {
+          const image = await loadPromise;
+          this.cache.set(proxiedUrl, image);
+          
+          // If we successfully used a fallback proxy, update the main proxy
+          if (proxy !== this.corsProxy) {
+            this.setCorsProxy(proxy);
+          }
+          
+          return image;
+        } finally {
+          this.loadingPromises.delete(proxiedUrl);
+        }
+      } catch (error) {
+        console.warn(`Failed to load with proxy ${proxy}:`, error);
+        // Continue to next proxy
+        continue;
+      }
     }
 
-    if (this.loadingPromises.has(proxiedUrl)) {
-      return this.loadingPromises.get(proxiedUrl)!;
-    }
+    throw new Error(`All proxies failed to load image: ${resource.url}`);
+  }
 
-    const loadPromise = this.createLoadPromise(proxiedUrl, timeout, retryAttempts, retryDelay);
-    this.loadingPromises.set(proxiedUrl, loadPromise);
-
-    try {
-      const image = await loadPromise;
-      this.cache.set(proxiedUrl, image);
-      return image;
-    } finally {
-      this.loadingPromises.delete(proxiedUrl);
+  /**
+   * Build proxied URL with proper encoding
+   */
+  public buildProxiedUrl(originalUrl: string, proxy: string): string {
+    if (proxy.includes('allorigins.win')) {
+      // Special handling for allorigins.win
+      return `${proxy}${encodeURIComponent(originalUrl)}`;
+    } else if (proxy.includes('cors-anywhere.herokuapp.com')) {
+      // Special handling for cors-anywhere
+      return `${proxy}${originalUrl}`;
+    } else {
+      // Default handling
+      return `${proxy}${originalUrl}`;
     }
   }
 
@@ -323,6 +364,10 @@ export class ResourceLoader {
    */
   setCorsProxy(proxy: string): void {
     this.corsProxy = proxy;
+    this.currentProxyIndex = this.corsProxyFallbacks.indexOf(proxy);
+    if (this.currentProxyIndex === -1) {
+      this.currentProxyIndex = 0;
+    }
   }
 
   /**
@@ -330,6 +375,24 @@ export class ResourceLoader {
    */
   getCorsProxy(): string {
     return this.corsProxy;
+  }
+
+  /**
+   * Rotate to next available proxy
+   */
+  rotateProxy(): void {
+    if (this.corsProxyFallbacks.length > 0) {
+      this.currentProxyIndex = (this.currentProxyIndex + 1) % this.corsProxyFallbacks.length;
+      this.corsProxy = this.corsProxyFallbacks[this.currentProxyIndex];
+    }
+  }
+
+  /**
+   * Reset to default proxy
+   */
+  resetProxy(): void {
+    this.corsProxy = API_CONFIG.CORS_PROXY;
+    this.currentProxyIndex = 0;
   }
 }
 

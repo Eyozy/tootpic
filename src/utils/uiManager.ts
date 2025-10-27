@@ -68,16 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
             resourceLoader.clearCache();
         }
     }
-            downloadBtn?.addEventListener('click', async () => {
-                try {
-                    const qualitySelector = domCache.getElement(DOM_ELEMENT_IDS.QUALITY_SELECTOR) as HTMLSelectElement;
-                    const pixelRatio = qualitySelector ? parseFloat(qualitySelector.value) : API_CONFIG.IMAGE_PIXEL_RATIO;
-                    await imageGenerator.generateAndDownload({ pixelRatio });
-                } catch (error) {
-                    console.error('Download failed:', error);
-                    showError('Image generation failed. Please try again.');
-                }
-            });
+    
+    downloadBtn?.addEventListener('click', async () => {
+        try {
+            const qualitySelector = domCache.getElement(DOM_ELEMENT_IDS.QUALITY_SELECTOR) as HTMLSelectElement;
+            const pixelRatio = qualitySelector ? parseFloat(qualitySelector.value) : API_CONFIG.IMAGE_PIXEL_RATIO;
+            await imageGenerator.generateAndDownload({ pixelRatio });
+        } catch (error) {
+            console.error('Download failed:', error);
+            showError('Image generation failed. Please try again.');
+        }
+    });
+
     templateToggle?.addEventListener('click', () => {
         templateManager.openModal();
     });
@@ -186,14 +188,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { instance, id } = match;
         fetchedInstance = instance;
-        const apiUrl = `https://cors.eu.org/https://${instance}/api/v1/statuses/${id}`;
+        const apiUrl = `${resourceLoader.getCorsProxy()}https://${instance}/api/v1/statuses/${id}`;
 
         if (postCache.has(apiUrl)) {
             postData = postCache.get(apiUrl);
             updatePreview();
             return;
         }
-
 
         if (previewArea) previewArea.classList.remove('hidden');
         setGenerateButtonState(true);
@@ -223,8 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 try {
                     await resourceLoader.preloadImages(imageResources, {
-                        timeout: 8000,
-                        retryAttempts: 2,
+                        timeout: 10000, // Increased timeout to 10 seconds
+                        retryAttempts: 3, // Increased retry attempts
                         retryDelay: 1000,
                         onProgress: (progress) => {
                             const statusText = `Loading images: ${progress.loaded}/${progress.total} (${progress.percentage}%)`;
@@ -243,6 +244,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (successRate < 50) {
                         console.warn(`Low image loading success rate: ${successRate}%`);
+                        // If success rate is low, try rotating the proxy
+                        resourceLoader.rotateProxy();
+                        if (previewStatus) {
+                            previewStatus.textContent = 'Some images failed to load, trying alternative proxy...';
+                            previewStatus.className = 'text-sm text-yellow-600';
+                        }
                     }
 
                 } catch (preloadError) {
@@ -299,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
             styleAContainer.classList.remove('hidden');
         }
 
-        const corsProxy = 'https://cors.eu.org/';
+        const corsProxy = resourceLoader.getCorsProxy();
 
         const fragment = document.createDocumentFragment();
 
@@ -317,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sourcePost.emojis) {
             sourcePost.emojis.forEach(emoji => {
                 const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
-                const proxiedUrl = `${corsProxy}${emoji.url}`;
+                const proxiedUrl = resourceLoader.buildProxiedUrl(emoji.url, corsProxy);
 
                 if (resourceLoader.isImageCached(emoji.url)) {
                     content = content.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
@@ -345,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
             avatarEl.crossOrigin = 'anonymous';
 
             if (resourceLoader.isImageCached(sourcePost.account.avatar)) {
-                avatarEl.src = `${corsProxy}${sourcePost.account.avatar}`;
+                avatarEl.src = resourceLoader.buildProxiedUrl(sourcePost.account.avatar, corsProxy);
             } else {
                 avatarEl.src = '/favicon.svg';
             }
@@ -358,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sourcePost.account.emojis) {
                 sourcePost.account.emojis.forEach(emoji => {
                     const regex = new RegExp(`:${emoji.shortcode}:`, 'g');
-                    const proxiedUrl = `${corsProxy}${emoji.url}`;
+                    const proxiedUrl = resourceLoader.buildProxiedUrl(emoji.url, corsProxy);
 
                     if (resourceLoader.isImageCached(emoji.url)) {
                         displayName = displayName.replace(regex, `<img src="${proxiedUrl}" alt=":${emoji.shortcode}:" class="custom-emoji" crossorigin="anonymous">`);
@@ -416,6 +423,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const attachmentsToDisplay = mediaAttachments.slice(0, 4);
 
+            if (attachmentsToDisplay.length >= 2) {
+                attachmentContainer.style.aspectRatio = '3 / 2';
+            }
+
             switch (attachmentsToDisplay.length) {
                 case 1:
                     attachmentContainer.style.gridTemplateColumns = '1fr';
@@ -431,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
             }
 
-            const corsProxy = 'https://cors.eu.org/';
+            const corsProxy = resourceLoader.getCorsProxy();
 
             const fragment = document.createDocumentFragment();
 
@@ -453,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     img.crossOrigin = 'anonymous';
                     img.alt = attachment.description || `Post attachment ${index + 1}`;
                     img.className = 'w-full h-full object-cover';
-                    img.src = `${corsProxy}${imageUrl}`;
+                    img.src = resourceLoader.buildProxiedUrl(imageUrl, corsProxy);
                     imgWrapper.appendChild(img);
                 } else {
                     const placeholder = document.createElement('div');
@@ -535,6 +546,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-
-    
 });
