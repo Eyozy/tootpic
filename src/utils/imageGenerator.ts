@@ -46,8 +46,6 @@ export class ImageGenerator {
       const clone = this.createPreviewClone(originalNode);
       const container = this.createTempContainer(clone);
 
-      await this.waitForImages(container);
-
       const dataUrl = await this.generateImage(container, clone, {
         quality,
         pixelRatio,
@@ -80,6 +78,11 @@ export class ImageGenerator {
     const clone = originalNode.cloneNode(true) as HTMLElement;
 
     clone.classList.remove('preview-card', 'border', 'rounded-xl');
+
+    // Apply styles that were removed with the classes
+    clone.style.border = '1px solid var(--brand-gray-200, #e5e7eb)'; // Default border
+    clone.style.borderRadius = '0.75rem'; // Tailwind's rounded-xl
+    clone.style.backgroundColor = templateManager.getTemplateBackgroundColor(); // Apply current template background color
 
     clone.style.width = `${IMAGE_CONFIG.MAX_WIDTH}px`;
     clone.style.maxWidth = `${IMAGE_CONFIG.MAX_WIDTH}px`;
@@ -166,58 +169,6 @@ export class ImageGenerator {
     }
   }
 
-  private async replaceBrokenImages(clone: HTMLElement): Promise<void> {
-    const images = clone.querySelectorAll('img');
-    const fallbackSrc = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDUiIGhlaWdodD0iNDUiIHZpZXdCb3g9IjAgMCA0NSA0NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjIyLjUiIGZpbGw9IiM5Q0FiQjIiLz4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjE4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4='; // Better looking default avatar placeholder
-
-    const replacements = Array.from(images).map(img => {
-      return new Promise<void>((resolve) => {
-        const imgElement = img as HTMLImageElement;
-
-        // Skip images that are already data URLs or SVG placeholders
-        if (imgElement.src.startsWith('data:') || imgElement.src.includes('PHN2ZyB3aWR0aD0iNDU')) {
-          resolve();
-          return;
-        }
-
-        // Handle proxy URLs
-        let originalUrl = imgElement.src;
-        if (originalUrl.includes('corsproxy.io')) {
-          const urlParts = originalUrl.split('corsproxy.io/?');
-          if (urlParts.length > 1) {
-            originalUrl = decodeURIComponent(urlParts[1]);
-          }
-        } else if (originalUrl.includes('cors.eu.org')) {
-          originalUrl = originalUrl.replace('https://cors.eu.org/', '');
-        }
-
-        // Test if the image can be loaded
-        const testImg = new Image();
-        testImg.crossOrigin = 'anonymous';
-
-        testImg.onload = () => {
-          // Image loaded successfully, keep original URL
-          resolve();
-        };
-
-        testImg.onerror = () => {
-          // Image failed to load, replace with placeholder
-          console.warn(`Replacing broken image: ${originalUrl}`);
-          imgElement.src = fallbackSrc;
-          
-          // Ensure placeholder displays correctly
-          imgElement.onerror = null; // Prevent infinite loop
-          resolve();
-        };
-
-        // Start loading test by setting image source
-        testImg.src = originalUrl;
-      });
-    });
-
-    await Promise.all(replacements);
-  }
-
   private async generateImage(
     container: HTMLElement,
     clone: HTMLElement,
@@ -233,9 +184,7 @@ export class ImageGenerator {
       // Inline Inter CSS first to avoid remote stylesheet issues
       await this.inlineInterCSS(clone);
 
-      // Replace any broken images before toPng
-      await this.replaceBrokenImages(clone);
-
+      // Use resourceLoader for fetching images within html-to-image
       const dataUrl = await toPng(clone, {
         quality: options.quality,
         pixelRatio: options.pixelRatio,
@@ -249,7 +198,18 @@ export class ImageGenerator {
         filter: (node: Node) => {
           return node.nodeName !== 'SCRIPT';
         },
-      });
+        fetch: async (url: string) => {
+          // Check if the URL is already proxied by our resourceLoader
+          const currentProxy = resourceLoader.getCorsProxy();
+          if (url.startsWith(currentProxy)) {
+            return fetch(url); // Already proxied, fetch directly
+          }
+
+          // Otherwise, use resourceLoader to build a proxied URL and fetch
+          const proxiedUrl = resourceLoader.buildProxiedUrl(url, currentProxy);
+          return fetch(proxiedUrl);
+        },
+      } as any);
 
       return dataUrl;
     } finally {
@@ -298,70 +258,6 @@ export class ImageGenerator {
   private showError(message: string): void {
     console.error(message);
     alert(message);
-  }
-
-  private async waitForImages(container: HTMLElement): Promise<void> {
-    const images = container.querySelectorAll('img');
-    const corsProxy = resourceLoader.getCorsProxy();
-
-    const imagePromises = Array.from(images).map(img => {
-      return new Promise<void>((resolve, reject) => {
-        const imgElement = img as HTMLImageElement;
-        const originalUrl = this.extractOriginalUrl(imgElement.src, corsProxy);
-
-        if (resourceLoader.isImageCached(originalUrl)) {
-          resolve();
-          return;
-        }
-
-        if (imgElement.complete && imgElement.naturalHeight !== 0) {
-          resolve();
-          return;
-        }
-
-        const fallbackSrc = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDUiIGhlaWdodD0iNDUiIHZpZXdCb3g9IjAgMCA0NSA0NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjIyLjUiIGZpbGw9IiM5Q0FiQjIiLz4KPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjIyLjUiIHI9IjE4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4='; // Better looking default avatar placeholder
-
-        let timeoutId: NodeJS.Timeout;
-
-        const cleanup = () => {
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-          imgElement.onload = null;
-          imgElement.onerror = null;
-        };
-
-        imgElement.onload = () => {
-          cleanup();
-          resolve();
-        };
-
-        imgElement.onerror = () => {
-          cleanup();
-          console.warn(`Image failed to load, using fallback: ${originalUrl}`);
-          imgElement.src = fallbackSrc;
-          imgElement.onerror = null; // Prevent infinite loop
-          resolve();
-        };
-
-        // Set timeout to prevent permanent waiting, increased to 10 seconds
-        timeoutId = setTimeout(() => {
-          cleanup();
-          console.warn(`Image loading timeout: ${originalUrl}`);
-          imgElement.src = fallbackSrc;
-          resolve();
-        }, 10000);
-      });
-    });
-
-    await Promise.all(imagePromises);
-  }
-
-  private extractOriginalUrl(proxiedUrl: string, corsProxy: string): string {
-    if (proxiedUrl.startsWith(corsProxy)) {
-      return proxiedUrl.substring(corsProxy.length);
-    }
-    return proxiedUrl;
   }
 
   private cleanup(): void {
