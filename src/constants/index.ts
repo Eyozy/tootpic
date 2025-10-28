@@ -2,7 +2,6 @@
  * Application constants and configuration
  */
 
-
 // Template names mapping
 export const TEMPLATE_NAMES = {
   classic: 'Classic',
@@ -16,14 +15,9 @@ export const DEFAULT_TEMPLATE_ID = 'classic';
 
 // API configuration
 export const API_CONFIG = {
-  CORS_PROXY: 'https://cors.eu.org/',
-  CORS_PROXY_FALLBACKS: [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url=',
-    'https://cors-anywhere.herokuapp.com/'
-  ],
+  // CORS proxy is no longer needed as all requests are handled server-side
   IMAGE_QUALITY: 1,
-  IMAGE_PIXEL_RATIO: 3, // Set to 3x for ultra-high quality images
+  IMAGE_PIXEL_RATIO: 3, // Fixed for optimal quality
 } as const;
 
 // Image generation configuration
@@ -67,5 +61,4 @@ export const DOM_ELEMENT_IDS = {
     BOOSTS: 'style-a-boosts',
     FAVS: 'style-a-favs',
     CURRENT_TEMPLATE_NAME: 'current-template-name',
-    QUALITY_SELECTOR: 'quality-selector',
 } as const;

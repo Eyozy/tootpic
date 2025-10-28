@@ -1,11 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import TemplateSelector from '../components/TemplateSelector.astro';
-import { templateManager } from '../utils/templateManager';
-import { imageGenerator } from '../utils/imageGenerator';
-import { domCache } from '../utils/domCache';
-import { resourceLoader } from '../utils/resourceLoader';
-import { API_CONFIG, DEFAULT_TEMPLATE_ID } from '../constants';
+import { DEFAULT_TEMPLATE_ID } from '../constants';
 import { Image } from 'astro:assets';
 
 ---
@@ -98,15 +94,6 @@ import { Image } from 'astro:assets';
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                                 <span class="sr-only">Toggle original post data usage</span>
                             </label>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-brand-gray-700 pr-4">Image Quality</span>
-                            <label for="quality-selector" class="sr-only">Quality</label>
-                            <select id="quality-selector" name="quality" class="px-3 py-2 text-sm rounded-md border border-brand-gray-300 bg-white focus:outline-none focus:border-brand-blue cursor-pointer appearance-none text-center">
-                                <option value="1.5">Good</option>
-                                <option value="2" selected>Better</option>
-                                <option value="3">Best</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -314,24 +301,5 @@ import { Image } from 'astro:assets';
                 padding: 1rem;
             }
         }
-
-        /* Remove default select arrow and ensure proper spacing */
-        #quality-selector {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: none;
-            padding-right: 1rem;
-            transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                        box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                        transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        #quality-selector:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-            transform: translateY(-1px);
-        }
-
-      </style>
+    </style>
 </Layout>

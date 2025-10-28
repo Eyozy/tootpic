@@ -32,20 +32,13 @@
     <link rel="canonical" href="https://tootpic.vercel.app/">
 
     <!-- Preconnect to external domains -->
-    <link rel="preconnect" href="https://cors.eu.org">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
 
-    <!-- Resource hints -->
-    <link rel="dns-prefetch" href="https://rsms.me">
-
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    
-    <link rel="preload" href="https://rsms.me/inter/inter.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://rsms.me/inter/inter.css"></noscript>
     <link rel="preload" href="/favicon.svg" as="image" type="image/svg+xml">
     <script defer src="https://cloud.umami.is/script.js" data-website-id="35fb3e3e-c37a-4e46-88d1-672287a6c48b"></script>
 
-        <script type="application/ld+json">
+    <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebApplication",
@@ -54,15 +47,8 @@
         "url": "https://tootpic.vercel.app/",
         "applicationCategory": "DesignApplication",
         "operatingSystem": "Web Browser",
-        "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
-        },
-        "creator": {
-            "@type": "Person",
-            "name": "Eyozy"
-        },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "creator": { "@type": "Person", "name": "Eyozy" },
         "featureList": [
             "Mastodon post conversion",
             "High-quality image generation",
@@ -92,10 +78,18 @@
             </a>
         </span>
     </footer>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" integrity="sha512-7tWCgq9tTYS/QkGVyKrtLpqAoMV9XIUxoou+sPUypsaZx56cYR/qio84fPK9EvJJtKvJEwt7vkn6je5UVzGevw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </body>
 </html>
 <style is:global>
+    /* Inter font (variable) with latin and latin-ext subsets, embedded as Base64 */
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url(data:font/woff2;base64,d09GMgABAAAAAAYgAA0AAAAACvQAAAX8AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAAVBEBEBQAhlQALEgE2AogbAATYCw4HCAeEFxMAfbcPsbV//7+f/fX58Pz/6I/4+f3y/f3y/fb0/vf0/vf0/vb0/vb0/vX0/vX0/fX0/vX0/fH0/fH0/fH0/e30/fH0/vH0/t30/vT0/fT0/vT0/u30/u30/u30/u30/u30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t30/t3-') format('woff2');
+    }
+    
     html {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         text-rendering: optimizeSpeed;
@@ -104,6 +98,8 @@
         padding: 0;
     }
 
+    /* ... Rest of your global styles remain the same ... */
+    
     html {
         height: 100dvh;
         overflow: hidden;
@@ -115,13 +111,12 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Active state: allows scrolling when content is loaded */
     html.is-content-active {
         height: auto;
         overflow-y: auto;
     }
 
-        main {
+    main {
         overflow-x: hidden;
     }
     
@@ -148,7 +143,7 @@
     .content-container a.mention,
     .content-container a.hashtag,
     .content-container a.url {
-        color: #1d4ed8; /* Tailwind's blue-700 - better contrast */
+        color: #1d4ed8;
         text-decoration: underline;
     }
 
