@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.display = 'grid';
         container.classList.add('gap-px');
         const toDisplay = attachments.slice(0, 4);
-        if (toDisplay.length >= 2) container.style.aspectRatio = '16 / 9';
+        if (toDisplay.length >= 2) container.style.aspectRatio = '3 / 2';
         container.style.gridTemplateColumns = toDisplay.length > 1 ? '1fr 1fr' : '1fr';
 
         toDisplay.forEach((att, index) => {
