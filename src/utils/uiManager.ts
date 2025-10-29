@@ -150,19 +150,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // 【Key Fix】The only rendering function, renders UI from global state
+    /**
+     * Renders the entire preview card based on the current postData and visibility settings.
+     * This function is the single source of truth for updating the preview UI.
+     */
     function renderPreview() {
         if (!postData || !styleAContainer) return;
-        
+
+        // If the post is a reblog, use the original post's data for rendering.
         const sourcePost: MastodonStatus = postData.reblog || postData;
 
-        // --- Content and Emojis ---
+        // --- 1. Process Content and Emojis ---
+        // Sanitize and prepare the main post content.
         let contentHTML = sourcePost.content;
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = contentHTML;
+        // Ensure external links have a specific class for styling.
         tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => link.classList.add('url'));
         contentHTML = tempDiv.innerHTML;
         
+        // Replace emoji shortcodes with their corresponding images from the pre-loaded imageMap.
         const allEmojis = [...(sourcePost.emojis || []), ...(sourcePost.account.emojis || [])];
         allEmojis.forEach(emoji => {
             const dataUrl = imageMap[emoji.url];
@@ -170,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             contentHTML = contentHTML.replaceAll(`:${emoji.shortcode}:`, dataUrl ? imgTag : `:${emoji.shortcode}:`);
         });
 
+        // Also process any emojis within the user's display name.
         let displayNameHTML = sourcePost.account.display_name;
         (sourcePost.account.emojis || []).forEach(emoji => {
              const dataUrl = imageMap[emoji.url];
@@ -177,28 +185,43 @@ document.addEventListener('DOMContentLoaded', () => {
              displayNameHTML = displayNameHTML.replaceAll(`:${emoji.shortcode}:`, dataUrl ? imgTag : `:${emoji.shortcode}:`);
         });
 
+        // --- 2. Render User and Content Information ---
+        // Inject the processed content into the DOM.
         (domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement).innerHTML = contentHTML;
         
-        // --- User Information ---
+        // Render the user's avatar, display name, and username.
         (domCache.getElement(DOM_ELEMENT_IDS.AVATAR_CONTAINER) as HTMLDivElement).innerHTML = `<img class="w-12 h-12 rounded-lg" alt="Avatar" src="${imageMap[sourcePost.account.avatar] || '/favicon.svg'}">`;
         (domCache.getElement(DOM_ELEMENT_IDS.DISPLAY_NAME) as HTMLDivElement).innerHTML = displayNameHTML;
 
+        // Construct the username, optionally including the instance name based on visibility settings.
         const usernameEl = domCache.getElement(DOM_ELEMENT_IDS.USERNAME) as HTMLDivElement;
         const { acct } = sourcePost.account;
         const usernamePart = acct.includes('@') ? acct.split('@')[0] : acct;
         const instancePart = acct.includes('@') ? acct.split('@').slice(1).join('@') : fetchedInstance;
         usernameEl.textContent = visibility.instance && instancePart ? `@${usernamePart}@${instancePart}` : `@${usernamePart}`;
 
-        // --- Media and Footer ---
+        // --- 3. Render Media and Footer ---
+        // Render media attachments like images and videos.
         renderMedia(sourcePost.media_attachments, imageMap);
+
+        // Format the date and time for the footer display.
         const date = new Date(sourcePost.created_at);
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        
+        // Render the footer section, which includes stats and the timestamp.
         renderFooter(sourcePost, visibility, formattedTime, formattedDate);
+
+        // --- 4. Finalize UI State ---
+        // Show the populated preview card.
         setPreviewState('content');
     }
     
-    // 【Key Fix】renderMedia function now only responsible for rendering based on imageMap
+    /**
+     * Renders media attachments (images/videos) into the preview card.
+     * @param attachments - The list of media attachments from the post.
+     * @param imgMap - A map of image URLs to their Base64 data URLs.
+     */
     function renderMedia(attachments: MastodonMediaAttachment[], imgMap: Record<string, string>) {
         const container = domCache.getElement(DOM_ELEMENT_IDS.ATTACHMENT) as HTMLDivElement;
         if (!container) return;
@@ -238,8 +261,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // --- Helper functions (remain unchanged) ---
-    function renderFooter(post: MastodonStatus, vis: typeof visibility, time: string, date: string) { const bottomSection = domCache.getElement(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement; const timestampEl = domCache.getElement(DOM_ELEMENT_IDS.TIMESTAMP) as HTMLDivElement; const statsEl = domCache.getElement(DOM_ELEMENT_IDS.STATS) as HTMLDivElement; if(timestampEl) { timestampEl.textContent = `${time} · ${date}`; timestampEl.style.display = vis.timestamp ? 'block' : 'none'; } if(statsEl) { statsEl.style.display = vis.stats ? 'flex' : 'none'; } (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.replies_count.toString(); (domCache.getElement(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.reblogs_count.toString(); (domCache.getElement(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favourites_count.toString(); const showBottom = vis.timestamp || vis.stats; if(bottomSection) { bottomSection.style.display = showBottom ? 'block' : 'none'; bottomSection.style.borderTopWidth = showBottom ? '1px' : '0'; bottomSection.style.paddingTop = showBottom ? '1rem' : '0'; } }
+    // --- Helper functions ---
+    function renderFooter(post: MastodonStatus, vis: typeof visibility, time: string, date: string) {
+        const bottomSection = domCache.getElement(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement;
+        const timestampEl = domCache.getElement(DOM_ELEMENT_IDS.TIMESTAMP) as HTMLDivElement;
+        const statsEl = domCache.getElement(DOM_ELEMENT_IDS.STATS) as HTMLDivElement;
+
+        if (timestampEl) {
+            timestampEl.textContent = `${time} · ${date}`;
+            timestampEl.style.display = vis.timestamp ? 'block' : 'none';
+        }
+
+        if (statsEl) {
+            statsEl.style.display = vis.stats ? 'flex' : 'none';
+        }
+
+        (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.replies_count.toString();
+        (domCache.getElement(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.reblogs_count.toString();
+        (domCache.getElement(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favourites_count.toString();
+
+        const showBottom = vis.timestamp || vis.stats;
+        if (bottomSection) {
+            bottomSection.style.display = showBottom ? 'block' : 'none';
+            bottomSection.style.borderTopWidth = showBottom ? '1px' : '0';
+            bottomSection.style.paddingTop = showBottom ? '1rem' : '0';
+        }
+    }
     function setPreviewState(state: 'loading' | 'content' | 'error') { if(loader) loader.classList.add('hidden'); if(styleAContainer) styleAContainer.classList.add('hidden'); if(state === 'loading' && loader) { loader.classList.remove('hidden'); if(previewStatus) previewStatus.textContent = 'Loading...'; } else if(state === 'content' && styleAContainer) { styleAContainer.classList.remove('hidden'); } else if (state === 'error' && previewStatus) { if(previewStatus) previewStatus.textContent = 'Error loading preview'; if(previewStatus) previewStatus.className = 'text-sm text-red-600'; } }
     function setGenerateButtonState(isLoading: boolean) { if(generateBtn) { generateBtn.disabled = isLoading; generateBtn.textContent = isLoading ? 'Fetching...' : 'Generate Preview'; } }
     function showError(message: string) { if(errorMessage) errorMessage.textContent = message; if(previewArea) previewArea.classList.add('hidden'); if(downloadBtn) downloadBtn.disabled = true; setPreviewState('error'); }
