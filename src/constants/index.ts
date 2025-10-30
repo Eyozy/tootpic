@@ -61,4 +61,8 @@ export const DOM_ELEMENT_IDS = {
     BOOSTS: 'style-a-boosts',
     FAVS: 'style-a-favs',
     CURRENT_TEMPLATE_NAME: 'current-template-name',
+    CONTENT_WARNING_BANNER: 'content-warning-banner',
+    CONTENT_WARNING_TEXT: 'content-warning-text',
+    CONTENT_WARNING_TOGGLE: 'content-warning-toggle',
+    CONTENT_WARNING_TOGGLE_CONTAINER: 'content-warning-toggle-container',
 } as const;

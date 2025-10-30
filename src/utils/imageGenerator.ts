@@ -80,7 +80,56 @@ export class ImageGenerator {
     clone.style.flexDirection = 'column';
     clone.style.visibility = 'visible';
     clone.style.opacity = '1';
+
+    // Handle content warning visibility in image generation
+    this.handleContentWarningInImage(clone);
+
     return clone;
+  }
+
+  /**
+   * Handle content warning banner visibility in image generation
+   */
+  private handleContentWarningInImage(clone: HTMLElement): void {
+    const contentWarningToggle = document.getElementById('content-warning-toggle') as HTMLInputElement;
+    const contentWarningBanner = clone.querySelector('#content-warning-banner') as HTMLElement;
+    const contentWarningText = clone.querySelector('#content-warning-text') as HTMLElement;
+
+    if (contentWarningBanner) {
+      // Check if the user has enabled content warning in images
+      const userWantsWarning = contentWarningToggle?.checked;
+
+      // Check if the post actually has content warning by checking if the control is visible
+      const hasPostWarning = document.getElementById('content-warning-toggle-container')?.classList.contains('hidden') === false;
+
+      // Check if there's actual warning content
+      const hasContent = contentWarningText && contentWarningText.textContent.trim() !== '';
+
+      // Show banner if: user wants it AND post has warning AND content is not empty
+      const shouldShowInImage = userWantsWarning && hasPostWarning && hasContent;
+
+      if (!shouldShowInImage) {
+        // Remove the banner completely for clean image generation
+        contentWarningBanner.remove();
+      } else {
+        // Ensure banner is properly visible for image generation
+        // Reset all animation and transition states
+        contentWarningBanner.classList.remove('hidden');
+        contentWarningBanner.style.display = 'block';
+        contentWarningBanner.style.visibility = 'visible';
+        contentWarningBanner.style.opacity = '1';
+        contentWarningBanner.style.maxHeight = 'none';
+        contentWarningBanner.style.minHeight = 'auto';
+        contentWarningBanner.style.height = 'auto';
+        contentWarningBanner.style.overflow = 'visible';
+
+        // Ensure proper spacing
+        contentWarningBanner.style.marginTop = '12px';
+        contentWarningBanner.style.marginBottom = '12px';
+        contentWarningBanner.style.paddingTop = '12px';
+        contentWarningBanner.style.paddingBottom = '12px';
+      }
+    }
   }
 
   private createTempContainer(clone: HTMLElement): HTMLElement {

@@ -31,12 +31,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const optionsContent = domCache.getElement(DOM_ELEMENT_IDS.OPTIONS_CONTENT) as HTMLDivElement;
     const optionsIcon = domCache.getElement(DOM_ELEMENT_IDS.OPTIONS_ICON) as SVGElement;
     const previewStatus = domCache.getElement(DOM_ELEMENT_IDS.PREVIEW_STATUS) as HTMLSpanElement;
+    const contentWarningBanner = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_BANNER) as HTMLDivElement;
+    const contentWarningText = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TEXT) as HTMLSpanElement;
+    const contentWarningToggle = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
+    const contentWarningToggleContainer = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
 
     let postData: MastodonStatus | null = null;
     let fetchedInstance = '';
     let imageMap: Record<string, string> = {};
-    let visibility = { stats: true, timestamp: true, instance: true };
+    let visibility = { stats: true, timestamp: true, instance: true, contentWarning: true };
     let eventSource: EventSource | null = null;
+
+    // Content warning animation state management
+    let contentWarningAnimationState = {
+        isAnimating: false,
+        lastContent: '',
+        debounceTimer: null as ReturnType<typeof setTimeout> | null,
+        isContentLoading: false
+    };
 
     generateBtn?.addEventListener('click', fetchMastodonPost);
     urlInput?.addEventListener('input', toggleClearButtonVisibility);
@@ -45,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     templateToggle?.addEventListener('click', () => templateManager.openModal());
     optionsToggle?.addEventListener('click', () => toggleAccordion(optionsContent, optionsIcon, optionsToggle));
 
+    
     document.addEventListener('templateSelected', () => {
         if (postData) renderPreview();
     });
@@ -87,6 +100,15 @@ document.addEventListener('DOMContentLoaded', () => {
             postData = metaData.postData;
             fetchedInstance = metaData.fetchedInstance;
             imageMap = metaData.imageMap;
+
+            // Show/hide content warning controls based on post sensitivity
+            if (contentWarningToggleContainer) {
+                if (postData.sensitive || postData.spoiler_text) {
+                    contentWarningToggleContainer.classList.remove('hidden');
+                } else {
+                    contentWarningToggleContainer.classList.add('hidden');
+                }
+            }
 
             renderPreview();
             if (downloadBtn) downloadBtn.disabled = true;
@@ -160,7 +182,131 @@ document.addEventListener('DOMContentLoaded', () => {
         // If the post is a reblog, use the original post's data for rendering.
         const sourcePost: MastodonStatus = postData.reblog || postData;
 
-        // --- 1. Process Content and Emojis ---
+        // --- 1. Handle Content Warning ---
+        if (contentWarningBanner && contentWarningText) {
+            const hasContent = sourcePost.sensitive || !!sourcePost.spoiler_text;
+            const warningText = sourcePost.spoiler_text || 'Sensitive content';
+            const shouldShow = hasContent && visibility.contentWarning;
+
+            // Clear any existing debounce timer
+            if (contentWarningAnimationState.debounceTimer) {
+                clearTimeout(contentWarningAnimationState.debounceTimer);
+            }
+
+            // Check if content has actually changed
+            const contentChanged = contentWarningAnimationState.lastContent !== warningText;
+
+            // If we're currently animating and content hasn't changed, skip
+            if (contentWarningAnimationState.isAnimating && !contentChanged) {
+                return;
+            }
+
+            // Update the last content
+            contentWarningAnimationState.lastContent = warningText;
+
+            // Use debounce to prevent rapid re-triggering during image loading
+            const delay = contentChanged ? 0 : 100;
+            contentWarningAnimationState.debounceTimer = setTimeout(() => {
+                updateContentWarningBanner(contentWarningBanner, contentWarningText, warningText, shouldShow);
+            }, delay as number); // Immediate if content changed, debounced if just re-rendering
+        }
+
+    /**
+     * Update content warning banner with proper animation and state management
+     */
+    function updateContentWarningBanner(banner: HTMLElement, textElement: HTMLElement, warningText: string, shouldShow: boolean) {
+        // Set animation state
+        contentWarningAnimationState.isAnimating = true;
+
+        if (shouldShow) {
+            // Set content first
+            textElement.textContent = warningText;
+
+            // If banner is already visible and properly sized, just update content
+            if (!banner.classList.contains('hidden') && banner.style.maxHeight === 'none') {
+                contentWarningAnimationState.isAnimating = false;
+                return;
+            }
+
+            // Make banner visible but collapsed
+            banner.classList.remove('hidden');
+            banner.style.maxHeight = '0';
+            banner.style.opacity = '0';
+            banner.style.paddingTop = '0';
+            banner.style.paddingBottom = '0';
+            banner.style.marginTop = '0';
+            banner.style.marginBottom = '0';
+            banner.style.overflow = 'hidden';
+
+            // Force reflow to ensure the content is rendered
+            void banner.offsetHeight;
+
+            // Now measure the natural height and expand
+            requestAnimationFrame(() => {
+                // Temporarily remove max-height to measure natural height
+                const naturalHeight = banner.scrollHeight;
+
+                // Set max-height to a slightly larger value to ensure full content is visible
+                banner.style.maxHeight = (naturalHeight + 20) + 'px'; // Increased buffer
+                banner.style.opacity = '1';
+                banner.style.paddingTop = '12px';
+                banner.style.paddingBottom = '12px';
+                banner.style.marginTop = '12px';
+                banner.style.marginBottom = '12px';
+
+                // Clean up after animation completes
+                banner.addEventListener('transitionend', function handler() {
+                    banner.style.maxHeight = 'none';
+                    banner.style.overflow = 'visible';
+                    contentWarningAnimationState.isAnimating = false;
+                    banner.removeEventListener('transitionend', handler);
+                }, { once: true });
+            });
+        } else {
+            // Collapse the banner
+            if (!banner.classList.contains('hidden')) {
+                // If banner is already collapsed, just hide it
+                if (banner.style.maxHeight === '0px') {
+                    banner.classList.add('hidden');
+                    contentWarningAnimationState.isAnimating = false;
+                    return;
+                }
+
+                // First, set a finite max-height if it's 'none'
+                const currentHeight = banner.scrollHeight || banner.offsetHeight;
+                banner.style.maxHeight = currentHeight + 'px';
+                banner.style.overflow = 'hidden';
+
+                // Force reflow
+                void banner.offsetHeight;
+
+                // Then collapse
+                requestAnimationFrame(() => {
+                    banner.style.maxHeight = '0';
+                    banner.style.opacity = '0';
+                    banner.style.paddingTop = '0';
+                    banner.style.paddingBottom = '0';
+                    banner.style.marginTop = '0';
+                    banner.style.marginBottom = '0';
+                });
+
+                // Hide after animation
+                banner.addEventListener('transitionend', function handler() {
+                    banner.classList.add('hidden');
+                    banner.style.maxHeight = '';
+                    banner.style.overflow = '';
+                    contentWarningAnimationState.isAnimating = false;
+                    banner.removeEventListener('transitionend', handler);
+                }, { once: true });
+            } else {
+                // If already hidden, ensure it stays hidden
+                banner.classList.add('hidden');
+                contentWarningAnimationState.isAnimating = false;
+            }
+        }
+    }
+
+        // --- 2. Process Content and Emojis ---
         // Sanitize and prepare the main post content.
         let contentHTML = sourcePost.content;
         const tempDiv = document.createElement('div');
@@ -292,5 +438,40 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message: string) { if(errorMessage) errorMessage.textContent = message; if(previewArea) previewArea.classList.add('hidden'); if(downloadBtn) downloadBtn.disabled = true; setPreviewState('error'); }
     function toggleClearButtonVisibility() { if (urlInput && clearUrlBtn) { urlInput.value.trim().length > 0 ? clearUrlBtn.classList.remove('hidden') : clearUrlBtn.classList.add('hidden'); } }
     function clearUrlInput() { if (urlInput) { urlInput.value = ''; toggleClearButtonVisibility(); urlInput.focus(); } }
-    function toggleAccordion(content: HTMLElement | null, icon: SVGElement | null, button: HTMLElement | null) { if (content && icon && button) { const isExpanded = button.getAttribute('aria-expanded') === 'true'; button.setAttribute('aria-expanded', String(!isExpanded)); icon.classList.toggle('rotate-180'); content.classList.toggle('hidden'); } }
+    function toggleAccordion(content: HTMLElement | null, icon: SVGElement | null, button: HTMLElement | null) {
+        if (content && icon && button) {
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', String(!isExpanded));
+            icon.classList.toggle('rotate-180');
+
+            if (isExpanded) {
+                // Collapse
+                content.style.maxHeight = content.scrollHeight + 'px'; // Set to current height before collapsing
+                requestAnimationFrame(() => {
+                    content.style.maxHeight = '0';
+                    content.style.opacity = '0';
+                    content.style.transform = 'scaleY(0)';
+                });
+                content.addEventListener('transitionend', function handler() {
+                    content.classList.add('hidden');
+                    content.removeEventListener('transitionend', handler);
+                }, { once: true });
+            } else {
+                // Expand
+                content.classList.remove('hidden');
+                content.style.maxHeight = '0';
+                content.style.opacity = '0';
+                content.style.transform = 'scaleY(0)';
+                requestAnimationFrame(() => {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    content.style.opacity = '1';
+                    content.style.transform = 'scaleY(1)';
+                });
+                content.addEventListener('transitionend', function handler() {
+                    content.style.maxHeight = '500px'; // Allow content to grow beyond initial scrollHeight if needed
+                    content.removeEventListener('transitionend', handler);
+                }, { once: true });
+            }
+        }
+    }
 });
