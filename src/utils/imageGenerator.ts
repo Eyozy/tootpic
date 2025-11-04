@@ -1,10 +1,7 @@
-/**
- * Image generation utility for template exports
- */
 import { domCache } from './domCache';
 import { templateManager } from './templateManager';
 import { API_CONFIG, IMAGE_CONFIG } from '../constants';
-import { toPng } from 'html-to-image';
+import { snapdom } from '@zumer/snapdom';
 
 export interface GenerationOptions {
   quality?: number;
@@ -168,17 +165,17 @@ export class ImageGenerator {
   ): Promise<string> {
     this.setDownloadButtonState('Generating...');
     
-    return toPng(clone, {
+    // snapdom returns an <img> element, we need to extract the src attribute.
+    const imgElement = await snapdom.toPng(clone, {
       quality: options.quality,
-      pixelRatio: options.pixelRatio,
+      dpr: options.pixelRatio, // `pixelRatio` is renamed to `dpr`
       backgroundColor: options.backgroundColor,
       width: IMAGE_CONFIG.MAX_WIDTH,
-      style: {
-        transform: 'scale(1)',
-        transformOrigin: 'top left',
-      },
+      // The `style` option is no longer needed as `scale: 1` is the default behavior.
       filter: (node: Node) => node.nodeName !== 'SCRIPT',
     });
+
+    return imgElement.src;
   }
 
   private downloadImage(dataUrl: string): void {
