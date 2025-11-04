@@ -38,6 +38,9 @@ export class ImageGenerator {
       throw new Error('Download button not found');
     }
 
+    let generationSuccess = false;
+    let copySuccess = false;
+
     try {
       this.setDownloadButtonState('Preparing...');
 
@@ -51,12 +54,18 @@ export class ImageGenerator {
       });
 
       this.downloadImage(dataUrl);
+      generationSuccess = true;
+
+      const altTextCopyToggle = document.getElementById('alt-text-copy-toggle') as HTMLInputElement;
+      if (altTextCopyToggle?.checked) {
+        copySuccess = await this.copyAltTextToClipboard();
+      }
 
     } catch (error) {
       console.error('Detailed image generation error:', error);
       this.showError('Image generation failed, please try again.');
     } finally {
-      this.resetDownloadButton();
+      this.resetDownloadButton(generationSuccess, copySuccess);
       this.cleanup();
     }
   }
@@ -180,6 +189,44 @@ export class ImageGenerator {
     link.click();
   }
 
+  private async copyAltTextToClipboard(): Promise<boolean> {
+    const contentEl = domCache.getElement('style-a-content');
+    const cwBannerEl = domCache.getElement('content-warning-banner');
+    const cwTextEl = domCache.getElement('content-warning-text');
+
+    if (!contentEl) {
+      console.warn('Content element for alt text not found.');
+      return false;
+    }
+
+    let altText = '';
+    // Check if Content Warning (CW) exists and is visible
+    const isCwVisible = cwBannerEl && !cwBannerEl.classList.contains('hidden');
+
+    // If Content Warning exists, add its text to altText
+    if (isCwVisible && cwTextEl && cwTextEl.textContent) {
+      altText += `CW: ${cwTextEl.textContent.trim()}\n\n`;
+    }
+
+    // Use innerText to preserve line breaks and formatting for screen readers
+    altText += (contentEl as HTMLElement).innerText;
+
+    if (!altText.trim()) {
+      console.warn('Alt text content is empty.');
+      return false;
+    }
+
+    try {
+      // Call browser API to write text to clipboard
+      await navigator.clipboard.writeText(altText.trim());
+      return true;
+    } catch (err) {
+      console.error('Failed to copy alt text to clipboard:', err);
+      this.showError('Could not copy alt text. Please copy it manually.');
+      return false;
+    }
+  }
+
   private setDownloadButtonState(text: string): void {
     if (this.downloadBtn) {
       this.downloadBtn.disabled = true;
@@ -192,15 +239,42 @@ export class ImageGenerator {
     }
   }
 
-  private resetDownloadButton(): void {
-    if (this.downloadBtn) {
-      this.downloadBtn.disabled = false;
-      this.downloadBtn.textContent = 'Download Image';
-    }
+  private resetDownloadButton(generationSuccess: boolean = false, copySuccess: boolean = false): void {
+    if (!this.downloadBtn) return;
+
+    this.downloadBtn.disabled = false;
     const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
-    if (previewStatus) {
-      previewStatus.textContent = 'Preview loaded successfully';
-      previewStatus.className = 'text-sm text-green-600';
+
+    if (generationSuccess) {
+      if (copySuccess) {
+        this.downloadBtn.textContent = '✅ Alt Text Copied!';
+        if (previewStatus) {
+          previewStatus.textContent = 'Image downloaded. Alt text copied.';
+          previewStatus.className = 'text-sm text-green-600';
+        }
+      } else {
+        this.downloadBtn.textContent = '✅ Image Downloaded!';
+        if (previewStatus) {
+          previewStatus.textContent = 'Image downloaded successfully.';
+          previewStatus.className = 'text-sm text-green-600';
+        }
+      }
+
+      setTimeout(() => {
+        if (this.downloadBtn && this.downloadBtn.textContent?.startsWith('✅')) {
+          this.downloadBtn.textContent = 'Download Image';
+          if (previewStatus) {
+            previewStatus.textContent = 'Preview loaded successfully';
+          }
+        }
+      }, 3000); // 3-second feedback message
+
+    } else {
+      this.downloadBtn.textContent = 'Download Image';
+      if (previewStatus) {
+        previewStatus.textContent = 'Preview loaded successfully';
+        previewStatus.className = 'text-sm text-green-600';
+      }
     }
   }
 

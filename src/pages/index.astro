@@ -97,6 +97,14 @@ import { Image } from 'astro:assets';
                             </label>
                             </div>
                         </div>
+                          <div class="flex items-center justify-between">
+                            <span class="text-brand-gray-700 pr-4">Auto-copy Alt Text</span>
+                            <label for="alt-text-copy-toggle" class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="alt-text-copy" id="alt-text-copy-toggle" class="sr-only peer" checked>
+                                <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                <span class="sr-only">Toggle alt text copy on download</span>
+                            </label>
+                        </div>
                         <div class="flex items-center justify-between">
                             <span class="text-brand-gray-700 pr-4">Use Original Post Data</span>
                             <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer">
