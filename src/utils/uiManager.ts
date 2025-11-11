@@ -2,10 +2,11 @@ import { templateManager } from './templateManager';
 import { imageGenerator } from './imageGenerator';
 import { domCache } from './domCache';
 import { DOM_ELEMENT_IDS } from '../constants';
-import type { MastodonStatus, MastodonMediaAttachment } from '../types/mastodon';
+import { FediverseClient } from './fediverseClient';
+import type { FediversePost, FediverseAttachment } from '../types/activitypub';
 
 interface PrefetchedMetaData {
-    postData: MastodonStatus;
+    postData: FediversePost;
     imageMap: Record<string, string>;
     imageUrls: string[];
     fetchedInstance: string;
@@ -36,11 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentWarningToggle = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
     const contentWarningToggleContainer = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
 
-    let postData: MastodonStatus | null = null;
+    let postData: FediversePost | null = null;
     let fetchedInstance = '';
     let imageMap: Record<string, string> = {};
     let visibility = { stats: true, timestamp: true, instance: true, contentWarning: true };
     let eventSource: EventSource | null = null;
+    let loadedImageUrls = new Set<string>();
+    let failedImageUrls = new Set<string>();
+    let isRendering = false;
+    let pendingRender = false;
 
     // Content warning animation state management
     let contentWarningAnimationState = {
@@ -50,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isContentLoading: false
     };
 
-    generateBtn?.addEventListener('click', fetchMastodonPost);
+    generateBtn?.addEventListener('click', fetchFediversePost);
     urlInput?.addEventListener('input', toggleClearButtonVisibility);
     clearUrlBtn?.addEventListener('click', clearUrlInput);
     downloadBtn?.addEventListener('click', () => imageGenerator.generateAndDownload().catch(err => showError('Image generation failed.')));
@@ -71,11 +76,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    async function fetchMastodonPost() {
+    async function fetchFediversePost() {
         if (eventSource) eventSource.close();
-        
-        const url = urlInput?.value.trim();
-        if (!url) return showError('Please enter a URL.');
+
+        // Reset image tracking state
+        loadedImageUrls.clear();
+        failedImageUrls.clear();
+
+        const url = urlInput?.value?.trim() || '';
+
+        if (!url) {
+            return showError('Please enter a URL');
+        }
 
         if (previewArea) previewArea.classList.remove('hidden');
         setGenerateButtonState(true);
@@ -86,34 +98,76 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const metaResponse = await fetch('/api/fetch-post-meta', {
+            // Use the Fediverse API to fetch the post
+            const apiResponse = await fetch('/api/fetch-post', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ url }),
             });
-            if (!metaResponse.ok) {
-                const errorData = await metaResponse.json().catch(() => ({ error: 'An unknown server error occurred' }));
-                throw new Error(errorData.error || `Server error: ${metaResponse.statusText}`);
+
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json().catch(() => ({ error: 'An unknown server error occurred' }));
+                const errorMessage = errorData.error || `Server error: ${apiResponse.statusText}`;
+                const suggestion = errorData.suggestion ? `\n\n💡 ${errorData.suggestion}` : '';
+                throw new Error(`${errorMessage}${suggestion}`);
             }
-            const metaData: PrefetchedMetaData = await metaResponse.json();
-            
-            postData = metaData.postData;
-            fetchedInstance = metaData.fetchedInstance;
-            imageMap = metaData.imageMap;
+
+            const responseData = await apiResponse.json();
+
+            // Use the actual post data from the API
+            postData = responseData.postData;
+
+            // Use the image map from the server response if available
+            if (responseData.imageMap) {
+                imageMap = responseData.imageMap;
+            } else {
+                // Initialize empty image map
+                imageMap = {};
+            }
+
+            // Extract instance domain from response or URL
+            fetchedInstance = responseData.fetchedInstance || new URL(url).hostname;
+
+            // If we already have image URLs from the server, use them
+            let imageUrls: string[] = [];
+            if (responseData.imageUrls && responseData.imageUrls.length > 0) {
+                imageUrls = responseData.imageUrls;
+            } else if (postData) {
+                // Otherwise collect image URLs from the post data
+                imageUrls = [
+                    ...postData.attachments.map(att => att.url),
+                    ...(postData.account.avatar ? [postData.account.avatar] : []),
+                    ...postData.account.emojis.map(emoji => emoji.url)
+                ].flat().filter(Boolean) as string[];
+            }
 
             // Show/hide content warning controls based on post sensitivity
-            if (contentWarningToggleContainer) {
-                if (postData.sensitive || postData.spoiler_text) {
+            if (contentWarningToggleContainer && postData) {
+                if (postData.sensitive || postData.spoilerText) {
                     contentWarningToggleContainer.classList.remove('hidden');
                 } else {
                     contentWarningToggleContainer.classList.add('hidden');
                 }
             }
 
-            renderPreview();
+            // Don't render preview yet, wait for all images to load first
+            if (imageUrls.length === 0) {
+                renderPreview();
+                if(downloadBtn) downloadBtn.disabled = false;
+                setGenerateButtonState(false);
+                return;
+            }
+
+            // Show loading state while waiting for images
+            setPreviewState('loading');
+            if (previewStatus) {
+                previewStatus.textContent = `Loading images (0/${imageUrls.length})...`;
+            }
             if (downloadBtn) downloadBtn.disabled = true;
 
-            if (metaData.imageUrls.length === 0) {
+            if (imageUrls.length === 0) {
                 if (previewStatus) {
                     previewStatus.textContent = 'Preview loaded successfully';
                     previewStatus.className = 'text-sm text-green-600';
@@ -122,36 +176,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 setGenerateButtonState(false);
                 return;
             }
-            
+
             if (previewStatus) {
-                previewStatus.textContent = `Loading images (0/${metaData.imageUrls.length})...`;
+                previewStatus.textContent = `Loading images (0/${imageUrls.length})...`;
             }
 
-            const encodedUrls = encodeURIComponent(metaData.imageUrls.join(','));
+            const encodedUrls = encodeURIComponent(imageUrls.join(','));
             eventSource = new EventSource(`/api/stream-images?urls=${encodedUrls}`);
             let loadedImages = 0;
-            const totalImages = metaData.imageUrls.length;
+            const totalImages = imageUrls.length;
 
             eventSource.onmessage = (event) => {
                 const data: StreamedImageData = JSON.parse(event.data);
-                loadedImages++;
                 if (data.url) {
-                    imageMap[data.url] = data.dataUrl;
-                    renderPreview(); // 【Key Fix】Redraw the entire preview after receiving an image
+                    if (data.dataUrl && data.dataUrl !== 'failed') {
+                        imageMap[data.url] = data.dataUrl;
+                        loadedImageUrls.add(data.url);
+                    } else {
+                        failedImageUrls.add(data.url);
+                    }
                 }
+
+                const loadedCount = loadedImageUrls.size;
+                const failedCount = failedImageUrls.size;
+                const processedCount = loadedCount + failedCount;
+
                 if (previewStatus) {
-                     previewStatus.textContent = `Loading images (${loadedImages}/${totalImages})...`;
+                    previewStatus.textContent = `Loading images (${processedCount}/${totalImages})...`;
                 }
-                 if(loadedImages >= totalImages){
-                     handleStreamEnd();
+
+                // Check if all required images have been processed (loaded or failed)
+                if (processedCount >= totalImages) {
+                    handleStreamEnd();
                 }
             };
-            
+
             const handleStreamEnd = () => {
+                // Clean up EventSource connection properly
                 if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
+                    try {
+                        eventSource.close();
+                        // Remove all event listeners to prevent memory leaks
+                        eventSource.onopen = null;
+                        eventSource.onmessage = null;
+                        eventSource.onerror = null;
+                    } catch (error) {
+                        console.warn('Error closing EventSource:', error);
+                    } finally {
+                        eventSource = null;
+                    }
                 }
+
+                // Reset render state before final render
+                isRendering = false;
+                pendingRender = false;
+
+                // Now render everything at once with all images loaded
+                renderPreview();
+
                 if (previewStatus && previewStatus.textContent?.includes('Loading')) {
                     previewStatus.textContent = 'Preview loaded successfully';
                     previewStatus.className = 'text-sm text-green-600';
@@ -162,7 +244,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
-                handleStreamEnd();
+                // Don't immediately call handleStreamEnd, let it retry naturally
+                // Only clean up after multiple consecutive failures
+                if (!eventSource) return; // Already cleaned up
+
+                try {
+                    eventSource.close();
+                    eventSource.onopen = null;
+                    eventSource.onmessage = null;
+                    eventSource.onerror = null;
+                } catch (e) {
+                    console.warn('Error during EventSource cleanup:', e);
+                } finally {
+                    eventSource = null;
+                }
+
+                // Fallback: Render with whatever images we have
+                if (loadedImageUrls.size > 0 || failedImageUrls.size > 0) {
+                    isRendering = false;
+                    pendingRender = false;
+                    renderPreview();
+
+                    if (previewStatus) {
+                        const loadedCount = loadedImageUrls.size;
+                        const failedCount = failedImageUrls.size;
+                        previewStatus.textContent = `Preview loaded with ${loadedCount} images${failedCount > 0 ? ` (${failedCount} failed)` : ''}`;
+                        previewStatus.className = 'text-sm text-yellow-600';
+                    }
+                    if(downloadBtn) downloadBtn.disabled = false;
+                    setGenerateButtonState(false);
+                } else {
+                    handleStreamEnd();
+                }
             };
             
         } catch (error) {
@@ -171,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setGenerateButtonState(false);
         }
     }
+
     
     /**
      * Renders the entire preview card based on the current postData and visibility settings.
@@ -179,13 +293,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPreview() {
         if (!postData || !styleAContainer) return;
 
-        // If the post is a reblog, use the original post's data for rendering.
-        const sourcePost: MastodonStatus = postData.reblog || postData;
+        // Prevent concurrent rendering
+        if (isRendering) {
+            pendingRender = true;
+            return;
+        }
+
+        isRendering = true;
+        pendingRender = false;
+
+        // Use the current post's data (no reblog handling for now as most platforms handle this differently)
+        const sourcePost: FediversePost = postData;
 
         // --- 1. Handle Content Warning ---
         if (contentWarningBanner && contentWarningText) {
-            const hasContent = sourcePost.sensitive || !!sourcePost.spoiler_text;
-            const warningText = sourcePost.spoiler_text || 'Sensitive content';
+            const hasContent = sourcePost.sensitive || !!sourcePost.spoilerText;
+            const warningText = sourcePost.spoilerText || 'Sensitive content';
             const shouldShow = hasContent && visibility.contentWarning;
 
             // Clear any existing debounce timer
@@ -308,59 +431,152 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- 2. Process Content and Emojis ---
         // Sanitize and prepare the main post content.
+        // Special handling for PeerTube videos - show video title prominently
         let contentHTML = sourcePost.content;
+        let isPeerTubeVideo = false;
+
+        if (sourcePost.platform === 'peertube' && sourcePost.attachments.length > 0) {
+            isPeerTubeVideo = true;
+            const videoAttachment = sourcePost.attachments[0];
+            const videoTitle = videoAttachment.description || 'Video';
+            // For PeerTube, use ONLY the video title as content (no description)
+            contentHTML = `<div class="text-xl font-bold mb-3">${videoTitle}</div>`;
+        }
+
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = contentHTML;
-        // Ensure external links have a specific class for styling.
-        tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => link.classList.add('url'));
+
+        // Keep links in their original format for natural appearance
+        tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => {
+            // Ensure links have proper styling but keep original format
+            link.classList.add('text-blue-600', 'hover:text-blue-800', 'underline');
+        });
+
+        // Style hashtags in content to make them more visible
+        tempDiv.querySelectorAll('a.hashtag').forEach(hashtag => {
+            hashtag.classList.add('inline-block', 'text-blue-600', 'hover:text-blue-800', 'font-medium');
+        });
+
         contentHTML = tempDiv.innerHTML;
-        
+
         // Replace emoji shortcodes with their corresponding images from the pre-loaded imageMap.
-        const allEmojis = [...(sourcePost.emojis || []), ...(sourcePost.account.emojis || [])];
+        const allEmojis = sourcePost.account.emojis || [];
+        
+
         allEmojis.forEach(emoji => {
             const dataUrl = imageMap[emoji.url];
-            const imgTag = `<img src="${dataUrl || ''}" alt=":${emoji.shortcode}:" class="custom-emoji" ${!dataUrl ? 'style="opacity:0; width:0; height:0;"' : ''}>`;
-            contentHTML = contentHTML.replaceAll(`:${emoji.shortcode}:`, dataUrl ? imgTag : `:${emoji.shortcode}:`);
+            let imgTag = '';
+
+            
+
+            if (dataUrl && dataUrl !== 'failed') {
+                // Emoji is loaded, display it
+                imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
+            } else if (imageMap[emoji.url] === undefined) {
+                // Emoji is still loading or not yet fetched - try direct URL
+                imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
+            } else {
+                // Emoji loading failed, keep the shortcode
+                imgTag = `:${emoji.shortcode}:`;
+            }
+
+            // Replace all occurrences in content
+            // Use regex for case-insensitive replacement
+            const emojiPattern = new RegExp(`:${emoji.shortcode}:`, 'gi');
+            contentHTML = contentHTML.replace(emojiPattern, imgTag);
         });
 
         // Also process any emojis within the user's display name.
-        let displayNameHTML = sourcePost.account.display_name;
+        let displayNameHTML = sourcePost.account.displayName;
+        
+
         (sourcePost.account.emojis || []).forEach(emoji => {
-             const dataUrl = imageMap[emoji.url];
-             const imgTag = `<img src="${dataUrl || ''}" alt=":${emoji.shortcode}:" class="custom-emoji" ${!dataUrl ? 'style="opacity:0; width:0; height:0;"' : ''}>`;
-             displayNameHTML = displayNameHTML.replaceAll(`:${emoji.shortcode}:`, dataUrl ? imgTag : `:${emoji.shortcode}:`);
+            const dataUrl = imageMap[emoji.url];
+            let imgTag = '';
+            if (dataUrl && dataUrl !== 'failed') {
+                // Emoji is loaded, display it
+                imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
+            } else if (imageMap[emoji.url] === undefined) {
+                // Emoji is still loading or not yet fetched - try direct URL
+                imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
+            } else {
+                // Emoji loading failed, keep the shortcode
+                imgTag = `:${emoji.shortcode}:`;
+            }
+
+            // Replace all occurrences in display name
+            const emojiPattern = new RegExp(`:${emoji.shortcode}:`, 'gi');
+            displayNameHTML = displayNameHTML.replace(emojiPattern, imgTag);
         });
 
-        // --- 2. Render User and Content Information ---
-        // Inject the processed content into the DOM.
-        (domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement).innerHTML = contentHTML;
         
-        // Render the user's avatar, display name, and username.
-        (domCache.getElement(DOM_ELEMENT_IDS.AVATAR_CONTAINER) as HTMLDivElement).innerHTML = `<img class="w-12 h-12 rounded-lg" alt="Avatar" src="${imageMap[sourcePost.account.avatar] || '/favicon.svg'}">`;
-        (domCache.getElement(DOM_ELEMENT_IDS.DISPLAY_NAME) as HTMLDivElement).innerHTML = displayNameHTML;
+
+        // --- 2.5 Process Tags ---
+        // Tags are already in the content HTML with proper styling
+
+        // --- 2. Render User and Content Information ---
+        // Render the user's avatar, display name, and username FIRST (before content)
+        let avatarHTML = '';
+
+
+        // Use the real user avatar directly
+        if (sourcePost.account.avatar) {
+            
+
+            // If we have the avatar loaded from imageMap, use it
+            if (imageMap[sourcePost.account.avatar] && imageMap[sourcePost.account.avatar] !== 'failed') {
+                avatarHTML = `<img class="w-12 h-12 rounded-lg object-cover" alt="Avatar" src="${imageMap[sourcePost.account.avatar]}" onerror="this.src='${sourcePost.account.avatar}'">`;
+            }
+            // If avatar loading failed or not in imageMap yet, try direct URL
+            else {
+                
+                avatarHTML = `<img class="w-12 h-12 rounded-lg object-cover" alt="Avatar" src="${sourcePost.account.avatar}" onerror="this.style.display='none'">`;
+            }
+        } else {
+            
+            avatarHTML = `<div class="w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-medium">?</div>`;
+        }
+
+        // Render avatar and user info first
+        const avatarContainerEl = domCache.getElement(DOM_ELEMENT_IDS.AVATAR_CONTAINER) as HTMLDivElement;
+        const displayNameEl = domCache.getElement(DOM_ELEMENT_IDS.DISPLAY_NAME) as HTMLDivElement;
+        const usernameEl = domCache.getElement(DOM_ELEMENT_IDS.USERNAME) as HTMLDivElement;
+
+        avatarContainerEl.innerHTML = avatarHTML;
+        displayNameEl.innerHTML = displayNameHTML;
 
         // Construct the username, optionally including the instance name based on visibility settings.
-        const usernameEl = domCache.getElement(DOM_ELEMENT_IDS.USERNAME) as HTMLDivElement;
         const { acct } = sourcePost.account;
         const usernamePart = acct.includes('@') ? acct.split('@')[0] : acct;
         const instancePart = acct.includes('@') ? acct.split('@').slice(1).join('@') : fetchedInstance;
         usernameEl.textContent = visibility.instance && instancePart ? `@${usernamePart}@${instancePart}` : `@${usernamePart}`;
 
+    
+        // Inject the processed content into the DOM AFTER user info is rendered
+        (domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement).innerHTML = contentHTML;
+
         // --- 3. Render Media and Footer ---
         // Render media attachments like images and videos.
-        renderMedia(sourcePost.media_attachments, imageMap);
+        renderMedia(sourcePost.attachments, imageMap);
 
         // Format the date and time for the footer display.
-        const date = new Date(sourcePost.created_at);
+        const date = new Date(sourcePost.createdAt);
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-        
+
         // Render the footer section, which includes stats and the timestamp.
         renderFooter(sourcePost, visibility, formattedTime, formattedDate);
 
         // --- 4. Finalize UI State ---
         // Show the populated preview card.
         setPreviewState('content');
+
+        // Reset render lock and check for pending render
+        isRendering = false;
+        if (pendingRender) {
+            // Use setTimeout to avoid call stack issues
+            setTimeout(() => renderPreview(), 0);
+        }
     }
     
     /**
@@ -368,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param attachments - The list of media attachments from the post.
      * @param imgMap - A map of image URLs to their Base64 data URLs.
      */
-    function renderMedia(attachments: MastodonMediaAttachment[], imgMap: Record<string, string>) {
+    function renderMedia(attachments: FediverseAttachment[], imgMap: Record<string, string>) {
         const container = domCache.getElement(DOM_ELEMENT_IDS.ATTACHMENT) as HTMLDivElement;
         if (!container) return;
         container.innerHTML = '';
@@ -382,33 +598,90 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.display = 'grid';
         container.classList.add('gap-px');
         const toDisplay = attachments.slice(0, 4);
-        if (toDisplay.length >= 2) container.style.aspectRatio = '3 / 2';
+        const hasMore = attachments.length > 4;
+
+        // Check if there are any videos or GIFs in the attachments
+        const hasVideosOrGifs = toDisplay.some(att => att.type === 'video' || att.type === 'gifv');
+
+        // Only apply 3/2 aspect ratio for image-only layouts
+        if (toDisplay.length >= 2 && !hasVideosOrGifs) {
+            container.style.aspectRatio = '3 / 2';
+        }
         container.style.gridTemplateColumns = toDisplay.length > 1 ? '1fr 1fr' : '1fr';
 
         toDisplay.forEach((att, index) => {
-            const url = att.type === 'image' ? att.url : (att.preview_url || att.url);
-            const dataUrl = imgMap[url];
+            // For videos and GIFs, use preview URL; for images, use the main URL
+            let url = att.url;
+            let previewUrl = att.previewUrl;
+
+            // Choose the appropriate URL for display
+            let displayUrl = url;
+            if (att.type === 'video' || att.type === 'gifv') {
+                // For videos, prefer preview URL if available
+                displayUrl = previewUrl || url;
+            }
+
+            // Try to get the data URL from imageMap
+            let dataUrl = imgMap[displayUrl];
+
+            // If preview URL didn't work, try the main URL
+            if (!dataUrl && previewUrl && att.type === 'video') {
+                dataUrl = imgMap[url];
+                displayUrl = url;
+            }
+
             const wrapper = document.createElement('div');
             wrapper.className = 'overflow-hidden relative';
 
-            if (dataUrl && dataUrl !== 'failed') {
+            // Special handling for videos without preview URL
+            if ((att.type === 'video' || att.type === 'gifv') && !previewUrl) {
+                
+
+                // Create a visually appealing placeholder for videos
+                // Extract a simple identifier from the URL for display
+                const urlParts = url.split('/');
+                const filename = urlParts[urlParts.length - 1].split('.')[0];
+                const shortId = filename.substring(0, 8) + '...';
+
+                wrapper.innerHTML = `
+                    <div class="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center text-white p-4">
+                        <svg class="w-20 h-20 mb-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                        </svg>
+                        <div class="text-base font-medium mb-1">${att.type === 'gifv' ? 'GIF Video' : 'Video Content'}</div>
+                        <div class="text-xs text-gray-400 font-mono">${shortId}</div>
+                    </div>
+                `;
+            }
+            else if (dataUrl && dataUrl !== 'failed') {
+                // Image is loaded, display it
                 wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${dataUrl}">`;
             } else if (dataUrl === 'failed') {
-                wrapper.innerHTML = `<div class="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500"><svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>`;
+                // If image loading failed, try to use the original URL as fallback
+                wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${displayUrl}" onerror="this.parentElement.innerHTML = '<div class=\"w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\"><svg class=\"w-8 h-8 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg></div>'">`;
             } else {
+                // Image is still loading, show shimmer animation
                 wrapper.innerHTML = `<div class="w-full h-full shimmer"></div>`;
             }
 
+            // Add overlay badges for video types
             if (att.type === 'gifv') wrapper.innerHTML += `<div class="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded z-10">GIF</div>`;
             if (att.type === 'video') wrapper.innerHTML += `<div class="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center z-10"><svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/></svg>Video</div>`;
+
+            // Add "more images" badge on the last image if there are more than 4
+            if (hasMore && index === toDisplay.length - 1) {
+                const moreCount = attachments.length - 4;
+                wrapper.innerHTML += `<div class="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10"><div class="text-white text-2xl font-bold">+${moreCount}</div></div>`;
+            }
+
             if (toDisplay.length === 3 && index === 0) wrapper.style.gridRow = 'span 2 / span 2';
-            
+
             container.appendChild(wrapper);
         });
     }
     
     // --- Helper functions ---
-    function renderFooter(post: MastodonStatus, vis: typeof visibility, time: string, date: string) {
+    function renderFooter(post: FediversePost, vis: typeof visibility, time: string, date: string) {
         const bottomSection = domCache.getElement(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement;
         const timestampEl = domCache.getElement(DOM_ELEMENT_IDS.TIMESTAMP) as HTMLDivElement;
         const statsEl = domCache.getElement(DOM_ELEMENT_IDS.STATS) as HTMLDivElement;
@@ -422,9 +695,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statsEl.style.display = vis.stats ? 'flex' : 'none';
         }
 
-        (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.replies_count.toString();
-        (domCache.getElement(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.reblogs_count.toString();
-        (domCache.getElement(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favourites_count.toString();
+        (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.repliesCount.toString();
+        (domCache.getElement(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.boostsCount.toString();
+        (domCache.getElement(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favouritesCount.toString();
 
         const showBottom = vis.timestamp || vis.stats;
         if (bottomSection) {
@@ -435,9 +708,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function setPreviewState(state: 'loading' | 'content' | 'error') { if(loader) loader.classList.add('hidden'); if(styleAContainer) styleAContainer.classList.add('hidden'); if(state === 'loading' && loader) { loader.classList.remove('hidden'); if(previewStatus) previewStatus.textContent = 'Loading...'; } else if(state === 'content' && styleAContainer) { styleAContainer.classList.remove('hidden'); } else if (state === 'error' && previewStatus) { if(previewStatus) previewStatus.textContent = 'Error loading preview'; if(previewStatus) previewStatus.className = 'text-sm text-red-600'; } }
     function setGenerateButtonState(isLoading: boolean) { if(generateBtn) { generateBtn.disabled = isLoading; generateBtn.textContent = isLoading ? 'Fetching...' : 'Generate Preview'; } }
-    function showError(message: string) { if(errorMessage) errorMessage.textContent = message; if(previewArea) previewArea.classList.add('hidden'); if(downloadBtn) downloadBtn.disabled = true; setPreviewState('error'); }
+    function showError(message: string, detail?: string) {
+        const fullMessage = detail ? `${message}\n${detail}` : message;
+        if(errorMessage) errorMessage.textContent = fullMessage;
+        if(previewArea) previewArea.classList.add('hidden');
+        if(downloadBtn) downloadBtn.disabled = true;
+        setPreviewState('error');
+    }
+
     function toggleClearButtonVisibility() { if (urlInput && clearUrlBtn) { urlInput.value.trim().length > 0 ? clearUrlBtn.classList.remove('hidden') : clearUrlBtn.classList.add('hidden'); } }
-    function clearUrlInput() { if (urlInput) { urlInput.value = ''; toggleClearButtonVisibility(); urlInput.focus(); } }
+    function clearUrlInput() {
+        if (urlInput) {
+            urlInput.value = '';
+            toggleClearButtonVisibility();
+            urlInput.focus();
+        }
+    }
     function toggleAccordion(content: HTMLElement | null, icon: SVGElement | null, button: HTMLElement | null) {
         if (content && icon && button) {
             const isExpanded = button.getAttribute('aria-expanded') === 'true';
