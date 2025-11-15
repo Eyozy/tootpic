@@ -1,13 +1,18 @@
 # TootPic
 
-Turn your Mastodon posts into beautiful, shareable images with just a few clicks.
+Turn your Fediverse posts into beautiful, shareable images with just a few clicks. Supports Mastodon, Pixelfed, PeerTube, Pleroma, Misskey, and all ActivityPub-compatible platforms.
 
 ## 🚀 Features
 
-- **Easy to Use**: Simply paste the URL of any Mastodon post
+- **Fediverse Universal Support**: Works with Mastodon, Pixelfed, PeerTube, Pleroma, Misskey, and all ActivityPub-compatible platforms
+- **Easy to Use**: Simply paste the URL of any Fediverse post
 - **Fully Customizable**: Choose to show or hide statistics, timestamps, and usernames
-- **High-Quality Output**: Generate crisp PNG images of your toots
+- **High-Quality Output**: Generate crisp PNG images of your posts
 - **Instant Download**: Save and share your created images effortlessly
+- **Advanced Caching**: LRU caching for improved performance and faster image generation
+- **Rate Limiting**: API endpoint protection to ensure fair usage
+- **Responsive Design**: Optimized for mobile and desktop devices
+- **ActivityPub Protocol**: Native support for the Fediverse's open protocol
 
 ## 🛠️ Tech Stack
 
