@@ -232,9 +232,9 @@ import { Image } from 'astro:assets';
             transform: scaleY(1);
         }
 
-        /* Content Warning Styles - Template Adaptive */
+        /* Content Warning Styles - 老王优化版: 使用 transform 代替 height/padding */
         .content-warning-cw {
-            background: #fff3cd; /* Yellow warning background */
+            background: #fff3cd;
             border: 1px solid #ffeaa7;
             border-left: 4px solid #f39c12;
             border-radius: 4px;
@@ -243,12 +243,29 @@ import { Image } from 'astro:assets';
             color: #856404;
             font-size: 15px;
             line-height: 1.4;
-            transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out,
-                        padding-top 0.3s ease-in-out, padding-bottom 0.3s ease-in-out,
-                        margin-top 0.3s ease-in-out, margin-bottom 0.3s ease-in-out;
-            overflow: hidden;
+            /* 使用 transform 动画性能更好,减少重排重绘 */
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform-origin: top;
+            will-change: transform, opacity;
             box-sizing: border-box;
-            will-change: max-height, opacity;
+        }
+
+        /* 展开动画初始状态 */
+        .content-warning-cw.cw-expanding {
+            transform: scaleY(0);
+            opacity: 0;
+        }
+
+        /* 可见状态 */
+        .content-warning-cw.cw-visible {
+            transform: scaleY(1);
+            opacity: 1;
+        }
+
+        /* 折叠动画状态 */
+        .content-warning-cw.cw-collapsing {
+            transform: scaleY(0);
+            opacity: 0;
         }
 
         .cw-text {

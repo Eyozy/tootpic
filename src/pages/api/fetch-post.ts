@@ -1,13 +1,85 @@
 import type { APIRoute } from 'astro';
 import { FediverseClient } from '../../utils/fediverseClient';
 
-// 简单的请求限制（内存版）
-const requestCounts = new Map<string, number>();
-const RATE_LIMIT = 50; // 每小时 50 次
-const WINDOW_MS = 60 * 60 * 1000; // 1 小时
+/**
+ * Rate limiter using sliding window algorithm with automatic cleanup
+ */
+class RateLimiter {
+  private requests: Map<string, number[]> = new Map();
+  private readonly limit: number;
+  private readonly windowMs: number;
+  private cleanupInterval: ReturnType<typeof setInterval>;
+
+  constructor(limit: number, windowMs: number) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+
+    // Cleanup expired data every 5 minutes
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 5 * 60 * 1000);
+  }
+
+  check(clientIp: string): boolean {
+    const now = Date.now();
+    const timestamps = this.requests.get(clientIp) || [];
+
+    // Filter out requests outside the time window
+    const validTimestamps = timestamps.filter(
+      ts => now - ts < this.windowMs
+    );
+
+    if (validTimestamps.length >= this.limit) {
+      return false;
+    }
+
+    validTimestamps.push(now);
+    this.requests.set(clientIp, validTimestamps);
+
+    return true;
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [ip, timestamps] of this.requests.entries()) {
+      const valid = timestamps.filter(ts => now - ts < this.windowMs);
+
+      if (valid.length === 0) {
+        this.requests.delete(ip);
+        cleanedCount++;
+      } else {
+        this.requests.set(ip, valid);
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`[RateLimiter] Cleaned ${cleanedCount} expired IPs, active: ${this.requests.size}`);
+    }
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval);
+    this.requests.clear();
+  }
+
+  getStats(): { activeIPs: number; totalRecords: number } {
+    let totalRecords = 0;
+    for (const timestamps of this.requests.values()) {
+      totalRecords += timestamps.length;
+    }
+    return {
+      activeIPs: this.requests.size,
+      totalRecords
+    };
+  }
+}
+
+const rateLimiter = new RateLimiter(50, 60 * 60 * 1000); // 50 requests per hour
 
 function getClientIP(request: Request): string {
-  // 获取客户端 IP，优先级：X-Forwarded-For > X-Real-IP > 其他
+  // Priority: X-Forwarded-For > X-Real-IP > CF-Connecting-IP
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
 
@@ -17,22 +89,10 @@ function getClientIP(request: Request): string {
   return request.headers.get('cf-connecting-ip') || 'unknown';
 }
 
-function checkRateLimit(clientIp: string): boolean {
-  const now = Date.now();
-  const key = `${clientIp}:${Math.floor(now / WINDOW_MS)}`;
-  const count = requestCounts.get(key) || 0;
-
-  if (count >= RATE_LIMIT) return false;
-
-  requestCounts.set(key, count + 1);
-  return true;
-}
-
 // This must be set to false for POST requests to work correctly in production.
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  // 修正版 CORS - 只允许的域名
   const origin = request.headers.get('origin');
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -41,7 +101,6 @@ export const POST: APIRoute = async ({ request }) => {
     'Vary': 'Origin'
   };
 
-  // 验证来源域名
   const allowedOrigins = [
     'https://tootpic.vercel.app',
     'http://localhost:4321',
@@ -51,16 +110,18 @@ export const POST: APIRoute = async ({ request }) => {
   if (origin && allowedOrigins.includes(origin)) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   } else if (origin && origin.includes('localhost')) {
-    // 开发环境特殊处理
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   }
 
   try {
-    // 速率限制检查
     const clientIp = getClientIP(request);
-    if (!checkRateLimit(clientIp)) {
+    if (!rateLimiter.check(clientIp)) {
       return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded', errorCode: 'RATE_LIMIT' }),
+        JSON.stringify({
+          error: 'Rate limit exceeded',
+          errorCode: 'RATE_LIMIT',
+          retryAfter: 3600
+        }),
         { status: 429, headers: corsHeaders }
       );
     }
@@ -81,7 +142,6 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 基础输入验证
     if (!body || typeof body !== 'object') {
       return new Response(
         JSON.stringify({ error: 'Invalid request body', errorCode: 'INVALID_BODY' }),
@@ -96,7 +156,6 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // URL 格式和安全验证
     if (url.length > 500) {
       return new Response(
         JSON.stringify({ error: 'URL too long', errorCode: 'URL_TOO_LONG' }),
@@ -113,7 +172,7 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
-      // 阻止内部网络地址
+      // Block internal network addresses
       const hostname = urlObj.hostname.toLowerCase();
       const internalPatterns = [
         /^localhost$/i,
@@ -135,7 +194,6 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
-      // 危险字符检测
       if (/[<>'"&]/.test(url)) {
         return new Response(
           JSON.stringify({ error: 'URL contains invalid characters', errorCode: 'INVALID_CHARS' }),
@@ -282,7 +340,6 @@ export const OPTIONS: APIRoute = async ({ request }) => {
     'Vary': 'Origin'
   };
 
-  // 处理 OPTIONS 预检请求
   const allowedOrigins = [
     'https://tootpic.vercel.app',
     'http://localhost:4321',

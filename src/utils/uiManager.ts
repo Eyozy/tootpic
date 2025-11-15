@@ -335,97 +335,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
     /**
-     * Update content warning banner with proper animation and state management
+     * Update content warning banner with optimized animations using CSS classes
      */
     function updateContentWarningBanner(banner: HTMLElement, textElement: HTMLElement, warningText: string, shouldShow: boolean) {
-        // Set animation state
         contentWarningAnimationState.isAnimating = true;
 
         if (shouldShow) {
-            // Set content first
             textElement.textContent = warningText;
 
-            // If banner is already visible and properly sized, just update content
-            if (!banner.classList.contains('hidden') && banner.style.maxHeight === 'none') {
+            if (!banner.classList.contains('hidden') && banner.classList.contains('cw-visible')) {
                 contentWarningAnimationState.isAnimating = false;
                 return;
             }
 
-            // Make banner visible but collapsed
             banner.classList.remove('hidden');
-            banner.style.maxHeight = '0';
-            banner.style.opacity = '0';
-            banner.style.paddingTop = '0';
-            banner.style.paddingBottom = '0';
-            banner.style.marginTop = '0';
-            banner.style.marginBottom = '0';
-            banner.style.overflow = 'hidden';
+            banner.classList.add('cw-expanding');
 
-            // Force reflow to ensure the content is rendered
-            void banner.offsetHeight;
+            void banner.offsetHeight; // Force reflow
 
-            // Now measure the natural height and expand
             requestAnimationFrame(() => {
-                // Temporarily remove max-height to measure natural height
-                const naturalHeight = banner.scrollHeight;
+                banner.classList.remove('cw-expanding');
+                banner.classList.add('cw-visible');
 
-                // Set max-height to a slightly larger value to ensure full content is visible
-                banner.style.maxHeight = (naturalHeight + 20) + 'px'; // Increased buffer
-                banner.style.opacity = '1';
-                banner.style.paddingTop = '12px';
-                banner.style.paddingBottom = '12px';
-                banner.style.marginTop = '12px';
-                banner.style.marginBottom = '12px';
-
-                // Clean up after animation completes
                 banner.addEventListener('transitionend', function handler() {
-                    banner.style.maxHeight = 'none';
-                    banner.style.overflow = 'visible';
                     contentWarningAnimationState.isAnimating = false;
                     banner.removeEventListener('transitionend', handler);
                 }, { once: true });
             });
+
         } else {
             // Collapse the banner
-            if (!banner.classList.contains('hidden')) {
-                // If banner is already collapsed, just hide it
-                if (banner.style.maxHeight === '0px') {
-                    banner.classList.add('hidden');
-                    contentWarningAnimationState.isAnimating = false;
-                    return;
-                }
+            if (banner.classList.contains('hidden')) {
+                contentWarningAnimationState.isAnimating = false;
+                return;
+            }
 
-                // First, set a finite max-height if it's 'none'
-                const currentHeight = banner.scrollHeight || banner.offsetHeight;
-                banner.style.maxHeight = currentHeight + 'px';
-                banner.style.overflow = 'hidden';
+            banner.classList.add('cw-collapsing');
 
-                // Force reflow
-                void banner.offsetHeight;
+            requestAnimationFrame(() => {
+                banner.classList.remove('cw-visible');
 
-                // Then collapse
-                requestAnimationFrame(() => {
-                    banner.style.maxHeight = '0';
-                    banner.style.opacity = '0';
-                    banner.style.paddingTop = '0';
-                    banner.style.paddingBottom = '0';
-                    banner.style.marginTop = '0';
-                    banner.style.marginBottom = '0';
-                });
-
-                // Hide after animation
                 banner.addEventListener('transitionend', function handler() {
                     banner.classList.add('hidden');
-                    banner.style.maxHeight = '';
-                    banner.style.overflow = '';
+                    banner.classList.remove('cw-collapsing');
                     contentWarningAnimationState.isAnimating = false;
                     banner.removeEventListener('transitionend', handler);
                 }, { once: true });
-            } else {
-                // If already hidden, ensure it stays hidden
-                banner.classList.add('hidden');
-                contentWarningAnimationState.isAnimating = false;
-            }
+            });
         }
     }
 
@@ -459,55 +415,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
         contentHTML = tempDiv.innerHTML;
 
-        // Replace emoji shortcodes with their corresponding images from the pre-loaded imageMap.
         const allEmojis = sourcePost.account.emojis || [];
-        
 
-        allEmojis.forEach(emoji => {
-            const dataUrl = imageMap[emoji.url];
-            let imgTag = '';
+        /**
+         * Optimized emoji replacement using single regex
+         */
+        function replaceEmojis(content: string, emojis: typeof allEmojis): string {
+            const emojiMap = new Map<string, string>();
 
-            
+            emojis.forEach(emoji => {
+                const dataUrl = imageMap[emoji.url];
+                let imgTag: string;
 
-            if (dataUrl && dataUrl !== 'failed') {
-                // Emoji is loaded, display it
-                imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
-            } else if (imageMap[emoji.url] === undefined) {
-                // Emoji is still loading or not yet fetched - try direct URL
-                imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
-            } else {
-                // Emoji loading failed, keep the shortcode
-                imgTag = `:${emoji.shortcode}:`;
-            }
+                if (dataUrl && dataUrl !== 'failed') {
+                    imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
+                } else if (imageMap[emoji.url] === undefined) {
+                    imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
+                } else {
+                    imgTag = `:${emoji.shortcode}:`;
+                }
 
-            // Replace all occurrences in content
-            // Use regex for case-insensitive replacement
-            const emojiPattern = new RegExp(`:${emoji.shortcode}:`, 'gi');
-            contentHTML = contentHTML.replace(emojiPattern, imgTag);
-        });
+                emojiMap.set(emoji.shortcode.toLowerCase(), imgTag);
+            });
 
-        // Also process any emojis within the user's display name.
+            return content.replace(/:([a-zA-Z0-9_]+):/g, (match, shortcode) => {
+                return emojiMap.get(shortcode.toLowerCase()) || match;
+            });
+        }
+
+        contentHTML = replaceEmojis(contentHTML, allEmojis);
+
         let displayNameHTML = sourcePost.account.displayName;
-        
-
-        (sourcePost.account.emojis || []).forEach(emoji => {
-            const dataUrl = imageMap[emoji.url];
-            let imgTag = '';
-            if (dataUrl && dataUrl !== 'failed') {
-                // Emoji is loaded, display it
-                imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
-            } else if (imageMap[emoji.url] === undefined) {
-                // Emoji is still loading or not yet fetched - try direct URL
-                imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
-            } else {
-                // Emoji loading failed, keep the shortcode
-                imgTag = `:${emoji.shortcode}:`;
-            }
-
-            // Replace all occurrences in display name
-            const emojiPattern = new RegExp(`:${emoji.shortcode}:`, 'gi');
-            displayNameHTML = displayNameHTML.replace(emojiPattern, imgTag);
-        });
+        displayNameHTML = replaceEmojis(displayNameHTML, sourcePost.account.emojis || []);
 
         
 

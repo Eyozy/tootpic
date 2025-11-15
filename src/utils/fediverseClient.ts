@@ -1,6 +1,7 @@
 import { parseFediverseUrl, convertMastodonToUniversal, convertActivityPubToUniversal } from './activitypubParser';
 import type { FediversePost, FediverseAccount } from '../types/activitypub';
 import { SUPPORTED_PLATFORMS, PlatformConfig } from '../types/activitypub';
+import { LRUCache } from './apiCache';
 
 export interface FetchPostResult {
   success: boolean;
@@ -24,9 +25,11 @@ export enum ErrorCode {
 }
 
 /**
- * Universal Fediverse client that can fetch posts from different ActivityPub platforms
+ * Universal Fediverse client with LRU cache for better performance
  */
 export class FediverseClient {
+  private static postCache = new LRUCache<FetchPostResult>(100, 30);
+
   /**
    * Universal API request method supporting different HTTP methods and platform configurations
    */
@@ -64,8 +67,17 @@ export class FediverseClient {
 
   /**
    * Fetch a post from any Fediverse platform
+   * Fetch post with cache support to reduce duplicate requests
    */
   static async fetchPost(url: string): Promise<FetchPostResult> {
+    const cached = this.postCache.get(url);
+    if (cached) {
+      console.log(`[FediverseClient] Cache hit: ${url.substring(0, 50)}...`);
+      return cached;
+    }
+
+    console.log(`[FediverseClient] Cache miss, fetching: ${url.substring(0, 50)}...`);
+
     try {
       // Validate URL format
       if (!url || typeof url !== 'string') {
@@ -138,44 +150,63 @@ export class FediverseClient {
       }
 
       // Route to appropriate platform handler
+      let result: FetchPostResult;
+
       switch (parsed.platform) {
         case 'mastodon':
-          return await this.fetchMastodonPost(parsed);
+          result = await this.fetchMastodonPost(parsed);
+          break;
         case 'pleroma':
-          return await this.fetchPleromaPost(parsed);
+          result = await this.fetchPleromaPost(parsed);
+          break;
         case 'pixelfed':
-          return await this.fetchPixelfedPost(parsed);
+          result = await this.fetchPixelfedPost(parsed);
+          break;
         case 'misskey':
-          return await this.fetchMisskeyPost(parsed);
+          result = await this.fetchMisskeyPost(parsed);
+          break;
         case 'peertube':
-          return await this.fetchPeerTubePost(parsed);
+          result = await this.fetchPeerTubePost(parsed);
+          break;
         case 'ech0':
-          return await this.fetchEch0Post(parsed);
+          result = await this.fetchEch0Post(parsed);
+          break;
         case 'generic':
           // For generic URLs, try to detect platform-specific APIs first
           // Check if URL pattern looks like PeerTube
           if (parsed.originalUrl.includes('/videos/watch/') || parsed.originalUrl.includes('/w/')) {
             const peertubeResult = await this.fetchPeerTubePost(parsed);
             if (peertubeResult.success) {
-              return peertubeResult;
+              result = peertubeResult;
+              break;
             }
           }
           // Check if URL pattern looks like Misskey
           else if (parsed.originalUrl.includes('/notes/')) {
             const misskeyResult = await this.fetchMisskeyPost(parsed);
             if (misskeyResult.success) {
-              return misskeyResult;
+              result = misskeyResult;
+              break;
             }
           }
-          return await this.fetchActivityPubObject(parsed.domain, parsed.id);
+          result = await this.fetchActivityPubObject(parsed.domain, parsed.id);
+          break;
         default:
-          return {
+          result = {
             success: false,
             error: `Unsupported platform: ${parsed.platform}`,
             errorCode: ErrorCode.UNSUPPORTED_PLATFORM,
             suggestion: 'Try a URL from a supported platform like Mastodon, Pixelfed, or PeerTube',
           };
       }
+
+      // Only cache successful results
+      if (result.success) {
+        this.postCache.set(url, result);
+        console.log(`[FediverseClient] Result cached: ${url.substring(0, 50)}...`);
+      }
+
+      return result;
     } catch (error) {
       console.error('Error fetching Fediverse post:', error);
 
