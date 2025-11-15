@@ -132,9 +132,9 @@ export class FediverseClient {
       if (!parsed) {
         return {
           success: false,
-          error: 'Unsupported URL format or platform',
+          error: 'Unsupported URL',
           errorCode: ErrorCode.UNSUPPORTED_PLATFORM,
-          suggestion: 'Please ensure the URL is from a supported Fediverse platform (Mastodon, Pixelfed, PeerTube, etc.) and is a direct link to a post, not a user profile or homepage.',
+          suggestion: 'Use direct post link from supported Fediverse platform (Mastodon, Pixelfed, PeerTube, etc.).',
         };
       }
 

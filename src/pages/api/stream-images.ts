@@ -18,14 +18,14 @@ const IMAGE_LIMITS = {
  * @returns Object containing original URL and converted Data URL, or failed marker
  */
 async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promise<{ url: string, dataUrl: string }> {
-  // URL 安全验证
+  
   try {
     const urlObj = new URL(url);
     if (!['http:', 'https:'].includes(urlObj.protocol)) {
       return { url, dataUrl: 'failed' };
     }
 
-    // 内部网络检测
+    
     const hostname = urlObj.hostname.toLowerCase();
     const internalPatterns = [
       /^localhost$/i,
@@ -43,7 +43,7 @@ async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promi
       return { url, dataUrl: 'failed' };
     }
 
-    // 危险字符检测
+    
     if (/[<>'"&]/.test(url)) {
       return { url, dataUrl: 'failed' };
     }
@@ -81,7 +81,7 @@ async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promi
  * API route that streams image data back to the client using Server-Sent Events.
  */
 export const GET: APIRoute = async ({ request }) => {
-  // 修正版 CORS - 只允许的域名
+  
   const origin = request.headers.get('origin');
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -90,7 +90,7 @@ export const GET: APIRoute = async ({ request }) => {
     'Vary': 'Origin'
   };
 
-  // 验证来源域名
+  
   const allowedOrigins = [
     'https://tootpic.vercel.app',
     'http://localhost:4321',
@@ -107,7 +107,7 @@ export const GET: APIRoute = async ({ request }) => {
     const searchParams = new URL(request.url).searchParams;
     const imageUrlsParam = searchParams.get('urls');
 
-    // 基础参数验证
+    
     if (!imageUrlsParam || typeof imageUrlsParam !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Missing URLs parameter', errorCode: 'MISSING_URLS' }),
@@ -122,27 +122,27 @@ export const GET: APIRoute = async ({ request }) => {
       );
     }
 
-    // 解码并验证 URL 参数
+    
     const rawUrls = imageUrlsParam.split(',').map(url => decodeURIComponent(url.trim())).filter(Boolean);
 
-    // 限制 URL 数量
-    if (rawUrls.length > 10) { // 降低到 10 个
+    
+    if (rawUrls.length > 10) { 
       return new Response(
         JSON.stringify({ error: 'Too many URLs (max 10)', errorCode: 'TOO_MANY_URLS' }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // 验证每个 URL
+    
     const imageUrls: string[] = [];
     for (const url of rawUrls) {
       try {
         const urlObj = new URL(url);
 
-        // 协议验证
+        
         if (!['http:', 'https:'].includes(urlObj.protocol)) continue;
 
-        // 内部网络检测
+        
         const hostname = urlObj.hostname.toLowerCase();
         const internalPatterns = [
           /^localhost$/i,
@@ -158,12 +158,12 @@ export const GET: APIRoute = async ({ request }) => {
         ];
         if (internalPatterns.some(pattern => pattern.test(hostname))) continue;
 
-        // 危险字符检测
+        
         if (/[<>'"&]/.test(url)) continue;
 
         imageUrls.push(url);
       } catch {
-        // URL 格式错误，跳过
+        
         continue;
       }
     }
@@ -254,7 +254,7 @@ export const OPTIONS: APIRoute = async ({ request }) => {
     'Vary': 'Origin'
   };
 
-  // 处理 OPTIONS 预检请求
+  
   const allowedOrigins = [
     'https://tootpic.vercel.app',
     'http://localhost:4321',

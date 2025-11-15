@@ -41,8 +41,8 @@ import { Image } from 'astro:assets';
                             class="block w-full pl-12 pr-4 py-4 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-gray-400"
                             autocomplete="url"
                         >
-                        <button id="clear-url-btn" class="absolute inset-y-0 right-0 pr-4 items-center hidden" aria-label="Clear URL">
-                            <svg class="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button id="clear-url-btn" class="absolute inset-y-0 right-3 place-items-center p-2 text-gray-500 hover:text-gray-700 transition-colors hidden" aria-label="Clear URL">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
                         </button>
@@ -232,7 +232,7 @@ import { Image } from 'astro:assets';
             transform: scaleY(1);
         }
 
-        /* Content Warning Styles - 老王优化版: 使用 transform 代替 height/padding */
+        /* Content Warning Styles */
         .content-warning-cw {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -243,26 +243,25 @@ import { Image } from 'astro:assets';
             color: #856404;
             font-size: 15px;
             line-height: 1.4;
-            /* 使用 transform 动画性能更好,减少重排重绘 */
             transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
             transform-origin: top;
             will-change: transform, opacity;
             box-sizing: border-box;
         }
 
-        /* 展开动画初始状态 */
+        
         .content-warning-cw.cw-expanding {
             transform: scaleY(0);
             opacity: 0;
         }
 
-        /* 可见状态 */
+        
         .content-warning-cw.cw-visible {
             transform: scaleY(1);
             opacity: 1;
         }
 
-        /* 折叠动画状态 */
+        
         .content-warning-cw.cw-collapsing {
             transform: scaleY(0);
             opacity: 0;
