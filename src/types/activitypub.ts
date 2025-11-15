@@ -68,6 +68,24 @@ export interface ActivityPubTag {
 }
 
 // Universal types for our application that can work with any ActivityPub platform
+export interface FediversePollOption {
+  title: string;
+  votes_count: number;
+  url?: string;
+}
+
+export interface FediversePoll {
+  id: string;
+  options: FediversePollOption[];
+  expired: boolean;
+  expires_at?: string;
+  multiple: boolean;
+  votes_count: number;
+  voters_count?: number;
+  voted?: boolean;
+  own_votes?: number[];
+}
+
 export interface FediversePost {
   id: string;
   content: string;
@@ -85,6 +103,7 @@ export interface FediversePost {
   inReplyTo?: string;
   language?: string;
   tags: FediverseTag[];
+  poll?: FediversePoll;
 }
 
 export interface FediverseAccount {

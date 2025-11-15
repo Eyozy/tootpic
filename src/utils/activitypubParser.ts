@@ -227,11 +227,11 @@ export function convertMastodonToUniversal(mastodonData: any): any {
 
           // Use the first derived URL
           previewUrl = derivedUrls[0];
-          
+
         }
       }
 
-      
+
 
       return {
         type: normalizedType,
@@ -257,6 +257,22 @@ export function convertMastodonToUniversal(mastodonData: any): any {
       url: tag.url,
       type: 'hashtag' as const,
     })) || [],
+    // Add poll support if present
+    poll: mastodonData.poll ? {
+      id: mastodonData.poll.id,
+      options: mastodonData.poll.options.map((option: any) => ({
+        title: option.title,
+        votes_count: option.votes_count,
+        url: option.url,
+      })),
+      expired: mastodonData.poll.expired,
+      expires_at: mastodonData.poll.expires_at,
+      multiple: mastodonData.poll.multiple,
+      votes_count: mastodonData.poll.votes_count,
+      voters_count: mastodonData.poll.voters_count,
+      voted: mastodonData.poll.voted,
+      own_votes: mastodonData.poll.own_votes,
+    } : undefined,
   };
 }
 
@@ -492,6 +508,44 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
 
     
 
+    // Handle poll data (if present) - ActivityPub doesn't have a strict standard for polls
+    // This handles common Mastodon/Pleroma ActivityPub poll formats
+    let poll = undefined;
+
+    // Check if it's a Create activity wrapping a Note with poll
+    const wrappedObject = activityPubData.object?.type === 'Note' ? activityPubData.object : activityPubData;
+
+    // Look for poll data in different formats
+    const pollData = wrappedObject.poll || wrappedObject.question;
+
+    if (pollData) {
+      // Check for options in different formats
+      const options = pollData.options?.map((option: any) => {
+        // Handle both ActivityStreams 1.0 and 2.0 formats
+        const optionTitle = option.content || option.name || option.title || '';
+        return {
+          title: optionTitle.replace(/<[^>]+>/g, '').trim(), // Strip HTML tags
+          votes_count: parseInt(option.votesCount || option.count || '0', 10),
+          url: option.url || '',
+        };
+      }) || [];
+
+      // Only create poll if there are options
+      if (options.length > 0) {
+        poll = {
+          id: pollData.id || `${wrappedObject.id}-poll`,
+          options,
+          expired: !!pollData.expired,
+          expires_at: pollData.expiresAt || pollData.expiredAt || '',
+          multiple: pollData.closed || false,
+          votes_count: parseInt(pollData.votesCount || pollData.totalVotes || '0', 10),
+          voters_count: parseInt(pollData.votersCount || pollData.participantsCount || '0', 10),
+          voted: !!pollData.voted,
+          own_votes: pollData.ownVotes || pollData.votedOptions || [],
+        };
+      }
+    }
+
     return {
       id,
       content,
@@ -508,6 +562,7 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
       platform,
       inReplyTo: activityPubData.inReplyTo,
       tags,
+      poll,
     };
   } catch (error) {
     console.error('Error converting ActivityPub to universal format:', error);

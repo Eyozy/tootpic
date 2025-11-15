@@ -3,7 +3,7 @@ import { imageGenerator } from './imageGenerator';
 import { domCache } from './domCache';
 import { DOM_ELEMENT_IDS } from '../constants';
 import { FediverseClient } from './fediverseClient';
-import type { FediversePost, FediverseAttachment } from '../types/activitypub';
+import type { FediversePost, FediverseAttachment, FediversePoll } from '../types/activitypub';
 
 interface PrefetchedMetaData {
     postData: FediversePost;
@@ -498,6 +498,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render media attachments like images and videos.
         renderMedia(sourcePost.attachments, imageMap);
 
+        // Render poll results if present
+        // Cleanup old poll container (fixes persistence issue)
+        const oldPollContainer = document.querySelector('.poll-container');
+        if (oldPollContainer) {
+            oldPollContainer.remove();
+        }
+
+        if (sourcePost.poll) {
+            renderPoll(sourcePost.poll);
+        }
+
         // Format the date and time for the footer display.
         const date = new Date(sourcePost.createdAt);
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -618,7 +629,84 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(wrapper);
         });
     }
-    
+
+    /**
+     * Renders poll results into the preview card.
+     * @param poll - The poll data from the post.
+     */
+    function renderPoll(poll: FediversePoll) {
+        if (!poll || !poll.options || poll.options.length === 0) return;
+
+        // Create poll container
+        const pollContainer = document.createElement('div');
+        pollContainer.className = 'poll-container mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200';
+
+        // Calculate total votes
+        const totalVotes = poll.options.reduce((sum: number, opt: FediversePoll['options'][0]) => sum + opt.votes_count, 0);
+
+        // Create options list
+        const optionsList = document.createElement('div');
+        optionsList.className = 'space-y-2';
+
+        poll.options.forEach((option: any, index: number) => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'flex items-center justify-between';
+
+            // Calculate percentage
+            const percentage = totalVotes > 0 ? Math.round((option.votes_count / totalVotes) * 100) : 0;
+
+            // Create progress bar container - reduced margin to 1
+            const progressContainer = document.createElement('div');
+            progressContainer.className = 'flex-1 h-2 bg-gray-200 rounded mr-1';
+
+            // Create progress fill
+            const progressFill = document.createElement('div');
+            progressFill.className = 'h-full bg-blue-500 rounded transition-all duration-300';
+            progressFill.style.width = `${percentage}%`;
+            progressContainer.appendChild(progressFill);
+
+            // Create option text - reduced margin to 2
+            const optionText = document.createElement('div');
+            optionText.className = 'text-sm mr-2 flex-1';
+            optionText.textContent = option.title;
+
+            // Create votes text
+            const votesText = document.createElement('div');
+            votesText.className = 'text-xs text-gray-500';
+            votesText.textContent = `${percentage}% (${option.votes_count} votes)`;
+
+            // Assemble option
+            optionDiv.appendChild(optionText);
+            optionDiv.appendChild(progressContainer);
+            optionDiv.appendChild(votesText);
+
+            optionsList.appendChild(optionDiv);
+        });
+
+        // Create poll info - removed emojis
+        const pollInfo = document.createElement('div');
+        pollInfo.className = 'text-xs text-gray-500 mt-2';
+
+        const totalText = `Total: ${poll.votes_count} votes`;
+        const deadlineText = poll.expired
+            ? 'Voting closed'
+            : poll.expires_at
+            ? `Ends: ${new Date(poll.expires_at).toLocaleDateString()}`
+            : 'Ends: No deadline';
+
+        pollInfo.textContent = `${totalText} | ${deadlineText}`;
+
+        // Assemble poll container - removed pollTitle
+        pollContainer.appendChild(optionsList);
+        pollContainer.appendChild(pollInfo);
+
+        // Insert poll after content
+        const contentEl = domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
+        if (contentEl.parentNode) {
+            contentEl.parentNode.insertBefore(pollContainer, contentEl.nextSibling);
+        }
+    }
+
     // --- Helper functions ---
     function renderFooter(post: FediversePost, vis: typeof visibility, time: string, date: string) {
         const bottomSection = domCache.getElement(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement;
