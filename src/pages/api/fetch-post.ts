@@ -1,18 +1,70 @@
 import type { APIRoute } from 'astro';
 import { FediverseClient } from '../../utils/fediverseClient';
 
+// 简单的请求限制（内存版）
+const requestCounts = new Map<string, number>();
+const RATE_LIMIT = 50; // 每小时 50 次
+const WINDOW_MS = 60 * 60 * 1000; // 1 小时
+
+function getClientIP(request: Request): string {
+  // 获取客户端 IP，优先级：X-Forwarded-For > X-Real-IP > 其他
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+
+  const realIP = request.headers.get('x-real-ip');
+  if (realIP) return realIP;
+
+  return request.headers.get('cf-connecting-ip') || 'unknown';
+}
+
+function checkRateLimit(clientIp: string): boolean {
+  const now = Date.now();
+  const key = `${clientIp}:${Math.floor(now / WINDOW_MS)}`;
+  const count = requestCounts.get(key) || 0;
+
+  if (count >= RATE_LIMIT) return false;
+
+  requestCounts.set(key, count + 1);
+  return true;
+}
+
 // This must be set to false for POST requests to work correctly in production.
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  // Simple CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+  // 修正版 CORS - 只允许的域名
+  const origin = request.headers.get('origin');
+  const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin'
   };
 
+  // 验证来源域名
+  const allowedOrigins = [
+    'https://tootpic.vercel.app',
+    'http://localhost:4321',
+    'http://localhost:3000'
+  ];
+
+  if (origin && allowedOrigins.includes(origin)) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+  } else if (origin && origin.includes('localhost')) {
+    // 开发环境特殊处理
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+  }
+
   try {
+    // 速率限制检查
+    const clientIp = getClientIP(request);
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded', errorCode: 'RATE_LIMIT' }),
+        { status: 429, headers: corsHeaders }
+      );
+    }
+
     const body = await request.json();
     const { url } = body;
 
@@ -29,7 +81,74 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Use URL directly without validation
+    // 基础输入验证
+    if (!body || typeof body !== 'object') {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body', errorCode: 'INVALID_BODY' }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (!url || typeof url !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Please provide a valid URL', errorCode: 'MISSING_URL' }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // URL 格式和安全验证
+    if (url.length > 500) {
+      return new Response(
+        JSON.stringify({ error: 'URL too long', errorCode: 'URL_TOO_LONG' }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    try {
+      const urlObj = new URL(url);
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        return new Response(
+          JSON.stringify({ error: 'URL must use HTTP or HTTPS', errorCode: 'INVALID_PROTOCOL' }),
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      // 阻止内部网络地址
+      const hostname = urlObj.hostname.toLowerCase();
+      const internalPatterns = [
+        /^localhost$/i,
+        /^127\./,
+        /^10\./,
+        /^192\.168\./,
+        /^172\.(1[6-9]|2[0-9]|3[01])\./,
+        /^169\.254\./,
+        /^0\./,
+        /^::1$/,
+        /^fc00:/,
+        /^fe80:/
+      ];
+
+      if (internalPatterns.some(pattern => pattern.test(hostname))) {
+        return new Response(
+          JSON.stringify({ error: 'Internal network addresses not allowed', errorCode: 'INTERNAL_URL' }),
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      // 危险字符检测
+      if (/[<>'"&]/.test(url)) {
+        return new Response(
+          JSON.stringify({ error: 'URL contains invalid characters', errorCode: 'INVALID_CHARS' }),
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid URL format', errorCode: 'INVALID_URL_FORMAT' }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     // Use the FediverseClient to fetch real data
     const result = await FediverseClient.fetchPost(url);
@@ -154,13 +273,30 @@ export const POST: APIRoute = async ({ request }) => {
   }
 };
 
-export const OPTIONS: APIRoute = async () => {
+export const OPTIONS: APIRoute = async ({ request }) => {
+  const origin = request.headers.get('origin');
+  const corsHeaders: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin'
+  };
+
+  // 处理 OPTIONS 预检请求
+  const allowedOrigins = [
+    'https://tootpic.vercel.app',
+    'http://localhost:4321',
+    'http://localhost:3000'
+  ];
+
+  if (origin && allowedOrigins.includes(origin)) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+  } else if (origin && origin.includes('localhost')) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+  }
+
   return new Response(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
+    headers: corsHeaders
   });
 };
