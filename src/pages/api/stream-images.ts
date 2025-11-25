@@ -115,20 +115,25 @@ export const GET: APIRoute = async ({ request }) => {
       );
     }
 
-    if (imageUrlsParam.length > 5000) {
+    // Increased limit to support complex posts with many images and emojis
+    // Encoded URLs can be ~3x longer; 20000 chars supports ~30-40 image URLs
+    if (imageUrlsParam.length > 20000) {
+      console.error(`[stream-images] URLs parameter too long: ${imageUrlsParam.length} characters (max 20000)`);
       return new Response(
         JSON.stringify({ error: 'URLs parameter too long', errorCode: 'URLS_TOO_LONG' }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    
+
     const rawUrls = imageUrlsParam.split(',').map(url => decodeURIComponent(url.trim())).filter(Boolean);
 
-    
-    if (rawUrls.length > 10) { 
+    // Increased limit to support posts with many custom emojis
+    // Typical case: 1 avatar + 4 images + 20+ emojis = 25+ URLs
+    if (rawUrls.length > 30) {
+      console.error(`[stream-images] Too many URLs: ${rawUrls.length} (max 30)`);
       return new Response(
-        JSON.stringify({ error: 'Too many URLs (max 10)', errorCode: 'TOO_MANY_URLS' }),
+        JSON.stringify({ error: 'Too many URLs (max 30)', errorCode: 'TOO_MANY_URLS' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -169,6 +174,8 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     if (imageUrls.length === 0) {
+      console.error(`[stream-images] No valid URLs after filtering. Raw URLs count: ${rawUrls.length}`);
+      console.error(`[stream-images] First few raw URLs:`, rawUrls.slice(0, 3));
       return new Response(
         JSON.stringify({ error: 'No valid image URLs provided', errorCode: 'INVALID_URLS' }),
         { status: 400, headers: corsHeaders }

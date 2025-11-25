@@ -37,6 +37,7 @@ export const DOM_ELEMENT_IDS = {
     MASTODON_URL: 'mastodon-url',
     GENERATE_BTN: 'generate-btn',
     DOWNLOAD_BTN: 'download-btn',
+    COPY_BTN: 'copy-btn',
     ERROR_MESSAGE: 'error-message',
     PREVIEW_AREA: 'preview-area',
     LOADER: 'loader',

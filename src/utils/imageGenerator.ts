@@ -11,9 +11,11 @@ export interface GenerationOptions {
 
 export class ImageGenerator {
   private downloadBtn: HTMLButtonElement | null = null;
+  private copyBtn: HTMLButtonElement | null = null;
 
   constructor() {
     this.downloadBtn = domCache.getElement('download-btn');
+    this.copyBtn = domCache.getElement('copy-btn');
   }
 
   /**
@@ -43,6 +45,8 @@ export class ImageGenerator {
 
       const clone = this.createPreviewClone(originalNode);
       const container = this.createTempContainer(clone);
+
+      this.setDownloadButtonState('Generating...');
 
       const dataUrl = await this.generateImage(clone, {
         quality,
@@ -74,6 +78,77 @@ export class ImageGenerator {
       }
     } finally {
       this.resetDownloadButton(generationSuccess, copySuccess);
+      this.cleanup();
+    }
+  }
+
+  /**
+   * Generate image and copy to clipboard
+   */
+  async generateAndCopy(): Promise<void> {
+    const originalNode = domCache.getElement('style-a-container');
+    if (!originalNode) {
+      throw new Error('Preview container not found');
+    }
+
+    if (!this.copyBtn) {
+      throw new Error('Copy button not found');
+    }
+
+    // Check browser Clipboard API support
+    if (!navigator.clipboard || !ClipboardItem) {
+      this.showError('Your browser does not support copying images. Please use the Download button instead.');
+      return;
+    }
+
+    let copySuccess = false;
+
+    try {
+      this.setCopyButtonState('Preparing...');
+
+      const clone = this.createPreviewClone(originalNode);
+      const container = this.createTempContainer(clone);
+
+      this.setCopyButtonState('Generating...');
+
+      const dataUrl = await this.generateImage(clone, {
+        quality: API_CONFIG.IMAGE_QUALITY,
+        pixelRatio: API_CONFIG.IMAGE_PIXEL_RATIO,
+        backgroundColor: templateManager.getTemplateBackgroundColor(),
+      });
+
+      this.setCopyButtonState('Copying...');
+
+      // Convert dataURL to Blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      // Write to clipboard
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+
+      copySuccess = true;
+      this.showCopySuccess();
+
+    } catch (error) {
+      console.error('Copy to clipboard failed:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      if (errorMessage.includes('NotAllowedError') || (error as any)?.name === 'NotAllowedError') {
+        this.showError('Clipboard access denied. Please allow clipboard permissions in your browser settings.');
+      } else if (errorMessage.includes('ClipboardItem')) {
+        this.showError('Your browser does not support copying images. Please use the Download button instead.');
+      } else if (errorMessage.includes('Preview container not found')) {
+        this.showError('Preview area not found. Please try loading a post first.');
+      } else if (errorMessage.includes('snapdom')) {
+        this.showError('Image generation failed. The post content might be too large or contains unsupported elements.');
+      } else {
+        this.showError(`Failed to copy image: ${errorMessage}`);
+      }
+    } finally {
+      this.resetCopyButton(copySuccess);
       this.cleanup();
     }
   }
@@ -495,8 +570,7 @@ export class ImageGenerator {
       backgroundColor: string;
     }
   ): Promise<string> {
-    this.setDownloadButtonState('Generating...');
-
+    // Note: Button state updates are handled by the caller
     try {
 
       // Validate clone before processing
@@ -673,6 +747,51 @@ export class ImageGenerator {
     }
   }
 
+  private setCopyButtonState(text: string): void {
+    if (this.copyBtn) {
+      this.copyBtn.disabled = true;
+      this.copyBtn.innerHTML = `
+        <svg class="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        ${text}
+      `;
+    }
+  }
+
+  private showCopySuccess(): void {
+    if (this.copyBtn) {
+      this.copyBtn.disabled = false;
+      this.copyBtn.innerHTML = `
+        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        Copied!
+      `;
+      this.copyBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+      this.copyBtn.classList.add('bg-green-600');
+    }
+  }
+
+  private resetCopyButton(copySuccess: boolean = false): void {
+    if (!this.copyBtn) return;
+
+    setTimeout(() => {
+      if (this.copyBtn) {
+        this.copyBtn.disabled = false;
+        this.copyBtn.classList.remove('bg-green-600');
+        this.copyBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+        this.copyBtn.innerHTML = `
+          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Copy Image
+        `;
+      }
+    }, copySuccess ? 2000 : 0);
+  }
+
   private showError(message: string): void {
     console.error(message);
     alert(message);
@@ -689,6 +808,7 @@ export class ImageGenerator {
 
   destroy(): void {
     this.downloadBtn = null;
+    this.copyBtn = null;
   }
 }
 

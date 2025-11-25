@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlInput = domCache.getElement(DOM_ELEMENT_IDS.MASTODON_URL) as HTMLInputElement;
     const generateBtn = domCache.getElement(DOM_ELEMENT_IDS.GENERATE_BTN) as HTMLButtonElement;
     const downloadBtn = domCache.getElement(DOM_ELEMENT_IDS.DOWNLOAD_BTN) as HTMLButtonElement;
+    const copyBtn = domCache.getElement(DOM_ELEMENT_IDS.COPY_BTN) as HTMLButtonElement;
     const errorMessage = domCache.getElement(DOM_ELEMENT_IDS.ERROR_MESSAGE) as HTMLDivElement;
     const previewArea = domCache.getElement(DOM_ELEMENT_IDS.PREVIEW_AREA) as HTMLDivElement;
     const loader = domCache.getElement(DOM_ELEMENT_IDS.LOADER) as HTMLDivElement;
@@ -59,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     urlInput?.addEventListener('input', toggleClearButtonVisibility);
     clearUrlBtn?.addEventListener('click', clearUrlInput);
     downloadBtn?.addEventListener('click', () => imageGenerator.generateAndDownload().catch(err => showError('Image generation failed.')));
+    copyBtn?.addEventListener('click', () => imageGenerator.generateAndCopy().catch(err => showError('Copy to clipboard failed.')));
     templateToggle?.addEventListener('click', () => templateManager.openModal());
     optionsToggle?.addEventListener('click', () => toggleAccordion(optionsContent, optionsIcon, optionsToggle));
 
@@ -89,7 +91,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return showError('Please enter a URL');
         }
 
-        if (previewArea) previewArea.classList.remove('hidden');
+        if (previewArea) {
+            previewArea.classList.remove('hidden');
+            previewArea.classList.add('flex', 'flex-col');
+        }
         setGenerateButtonState(true);
         setPreviewState('loading');
         if (previewStatus) {
@@ -156,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (imageUrls.length === 0) {
                 renderPreview();
                 if(downloadBtn) downloadBtn.disabled = false;
+                if(copyBtn) copyBtn.disabled = false;
                 setGenerateButtonState(false);
                 return;
             }
@@ -166,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewStatus.textContent = `Loading images (0/${imageUrls.length})...`;
             }
             if (downloadBtn) downloadBtn.disabled = true;
+            if (copyBtn) copyBtn.disabled = true;
 
             if (imageUrls.length === 0) {
                 if (previewStatus) {
@@ -173,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewStatus.className = 'text-sm text-green-600';
                 }
                 if(downloadBtn) downloadBtn.disabled = false;
+                if(copyBtn) copyBtn.disabled = false;
                 setGenerateButtonState(false);
                 return;
             }
@@ -239,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewStatus.className = 'text-sm text-green-600';
                 }
                 if(downloadBtn) downloadBtn.disabled = false;
+                if(copyBtn) copyBtn.disabled = false;
                 setGenerateButtonState(false);
             };
 
@@ -272,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         previewStatus.className = 'text-sm text-yellow-600';
                     }
                     if(downloadBtn) downloadBtn.disabled = false;
+                    if(copyBtn) copyBtn.disabled = false;
                     setGenerateButtonState(false);
                 } else {
                     handleStreamEnd();
@@ -738,12 +748,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message: string, detail?: string) {
         const fullMessage = detail ? `${message}\n${detail}` : message;
         if(errorMessage) errorMessage.textContent = fullMessage;
-        if(previewArea) previewArea.classList.add('hidden');
+        if(previewArea) {
+            previewArea.classList.add('hidden');
+            previewArea.classList.remove('flex', 'flex-col');
+        }
         if(downloadBtn) downloadBtn.disabled = true;
+        if(copyBtn) copyBtn.disabled = true;
         setPreviewState('error');
     }
 
-    function toggleClearButtonVisibility() { if (urlInput && clearUrlBtn) { urlInput.value.trim().length > 0 ? clearUrlBtn.classList.remove('hidden') : clearUrlBtn.classList.add('hidden'); } }
+    function toggleClearButtonVisibility() {
+        if (urlInput && clearUrlBtn) {
+            if (urlInput.value.trim().length > 0) {
+                // Show button: remove hidden, add flex, increase input padding
+                clearUrlBtn.classList.remove('hidden');
+                clearUrlBtn.classList.add('flex');
+                urlInput.classList.remove('pr-4');
+                urlInput.classList.add('pr-12');
+            } else {
+                // Hide button: add hidden, remove flex, decrease input padding
+                clearUrlBtn.classList.remove('flex');
+                clearUrlBtn.classList.add('hidden');
+                urlInput.classList.remove('pr-12');
+                urlInput.classList.add('pr-4');
+            }
+        }
+    }
     function clearUrlInput() {
         if (urlInput) {
             urlInput.value = '';

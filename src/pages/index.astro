@@ -38,10 +38,10 @@ import { Image } from 'astro:assets';
                             id="mastodon-url"
                             name="mastodon-url"
                             placeholder="Paste any Fediverse post URL (Mastodon, Pixelfed, PeerTube, etc.)"
-                            class="block w-full pl-12 pr-4 py-4 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 placeholder-gray-400"
+                            class="block w-full pl-12 pr-4 py-4 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400"
                             autocomplete="url"
                         >
-                        <button id="clear-url-btn" class="absolute inset-y-0 right-3 place-items-center p-2 text-gray-500 hover:text-gray-700 transition-colors hidden" aria-label="Clear URL">
+                        <button id="clear-url-btn" class="absolute inset-y-0 right-2 hidden items-center justify-center w-8 h-8 my-auto rounded-full bg-white hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-all duration-200 z-10" aria-label="Clear URL">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -142,7 +142,7 @@ import { Image } from 'astro:assets';
             </div>
 
             <!-- Preview Section -->
-            <div id="preview-area" class="w-full flex-col items-center space-y-5 hidden">
+            <div id="preview-area" class="w-full items-center space-y-5 hidden">
                 <div class="w-full flex items-center justify-between mb-6 p-1">
                     <div class="flex items-center gap-3">
                         <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -194,12 +194,24 @@ import { Image } from 'astro:assets';
                         </div>
                     </div>
                 </div>
-                <button id="download-btn" class="w-full bg-blue-500 text-white font-normal py-4 px-6 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-blue-500/25 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none disabled:hover:bg-gray-300 flex items-center justify-center gap-3" disabled>
-                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download Image
-                </button>
+                <!-- Button container - single column on mobile, side-by-side on tablet+ -->
+                <div class="w-full flex flex-col md:flex-row gap-3">
+                    <!-- Copy button - only visible on tablet+ -->
+                    <button id="copy-btn" class="max-md:hidden flex bg-green-500 text-white font-normal py-4 px-6 rounded-xl hover:bg-green-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-green-500/25 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none disabled:hover:bg-gray-300 flex-1 items-center justify-center gap-3" disabled>
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copy Image
+                    </button>
+
+                    <!-- Download button -->
+                    <button id="download-btn" class="flex-1 bg-blue-500 text-white font-normal py-4 px-6 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-blue-500/25 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none disabled:hover:bg-gray-300 flex items-center justify-center gap-3" disabled>
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Image
+                    </button>
+                </div>
             </div>
         </div>
     </main>
