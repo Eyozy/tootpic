@@ -16,8 +16,8 @@ export const DEFAULT_TEMPLATE_ID = 'classic';
 // API configuration
 export const API_CONFIG = {
   // CORS proxy is no longer needed as all requests are handled server-side
-  IMAGE_QUALITY: 1,
-  IMAGE_PIXEL_RATIO: 3, // Fixed for optimal quality
+  IMAGE_QUALITY: 0.95, // Slightly lower quality for faster generation
+  IMAGE_PIXEL_RATIO: 2, // Reduced from 3 to 2 for better performance (still high quality)
 } as const;
 
 // Image generation configuration

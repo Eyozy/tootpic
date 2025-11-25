@@ -103,13 +103,10 @@ export const POST: APIRoute = async ({ request }) => {
 
   const allowedOrigins = [
     'https://tootpic.vercel.app',
-    'http://localhost:4321',
-    'http://localhost:3000'
+    'http://localhost:4321'
   ];
 
   if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (origin && origin.includes('localhost')) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   }
 
@@ -342,13 +339,10 @@ export const OPTIONS: APIRoute = async ({ request }) => {
 
   const allowedOrigins = [
     'https://tootpic.vercel.app',
-    'http://localhost:4321',
-    'http://localhost:3000'
+    'http://localhost:4321'
   ];
 
   if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (origin && origin.includes('localhost')) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   }
 

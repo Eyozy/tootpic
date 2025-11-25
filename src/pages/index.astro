@@ -151,8 +151,10 @@ import { Image } from 'astro:assets';
                     <div id="preview-status" class="text-sm text-gray-600">Ready to generate</div>
                 </div>
                 <div id="image-container" class="w-full flex items-center justify-center">
-                    <div id="loader" class="loader m-16 hidden"></div>
-                    <div id="style-a-container" class="p-8 w-full h-full hidden flex-col preview-card border rounded-xl template-classic">
+                    <div id="style-a-container" class="p-8 w-full h-full hidden flex-col preview-card border rounded-xl template-classic transition-all duration-500 ease-in-out relative">
+                        <div id="loader" class="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl hidden z-10">
+                            <div class="loader"></div>
+                        </div>
                         <div class="flex items-center mb-4">
                             <div id="style-a-avatar-container" class="w-12 h-12 rounded-lg mr-4 flex-shrink-0"></div>
                             <div class="min-w-0 flex-1">

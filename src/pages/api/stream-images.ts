@@ -93,13 +93,10 @@ export const GET: APIRoute = async ({ request }) => {
   
   const allowedOrigins = [
     'https://tootpic.vercel.app',
-    'http://localhost:4321',
-    'http://localhost:3000'
+    'http://localhost:4321'
   ];
 
   if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (origin && origin.includes('localhost')) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   }
 
@@ -205,19 +202,24 @@ export const GET: APIRoute = async ({ request }) => {
           controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
         };
 
-        // Process all images in parallel with proper error handling
-        const promises = imageUrls.map(url =>
-          imageToBase64(url).then(result => {
-            // Send each result back as soon as it's ready
-            sendEvent(result);
-          }).catch(() => {
-            // Handle individual image errors without crashing the stream
-            sendEvent({ url, dataUrl: 'failed' });
-          })
-        );
+        // Batch processing: process 8 images at a time for better performance
+        const BATCH_SIZE = 8;
 
-        // Wait for all promises to settle
-        await Promise.allSettled(promises);
+        for (let i = 0; i < imageUrls.length; i += BATCH_SIZE) {
+          const batch = imageUrls.slice(i, i + BATCH_SIZE);
+          const promises = batch.map(url =>
+            imageToBase64(url).then(result => {
+              // Send each result back as soon as it's ready
+              sendEvent(result);
+            }).catch(() => {
+              // Handle individual image errors without crashing the stream
+              sendEvent({ url, dataUrl: 'failed' });
+            })
+          );
+
+          // Wait for current batch to complete before starting next batch
+          await Promise.allSettled(promises);
+        }
 
         // Close the stream once all images are processed
         controller.close();
@@ -264,13 +266,10 @@ export const OPTIONS: APIRoute = async ({ request }) => {
   
   const allowedOrigins = [
     'https://tootpic.vercel.app',
-    'http://localhost:4321',
-    'http://localhost:3000'
+    'http://localhost:4321'
   ];
 
   if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  } else if (origin && origin.includes('localhost')) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
   }
 

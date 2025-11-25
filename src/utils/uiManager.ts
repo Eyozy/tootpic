@@ -59,8 +59,27 @@ document.addEventListener('DOMContentLoaded', () => {
     generateBtn?.addEventListener('click', fetchFediversePost);
     urlInput?.addEventListener('input', toggleClearButtonVisibility);
     clearUrlBtn?.addEventListener('click', clearUrlInput);
-    downloadBtn?.addEventListener('click', () => imageGenerator.generateAndDownload().catch(err => showError('Image generation failed.')));
-    copyBtn?.addEventListener('click', () => imageGenerator.generateAndCopy().catch(err => showError('Copy to clipboard failed.')));
+    downloadBtn?.addEventListener('click', () => imageGenerator.generateAndDownload().catch(err => {
+        showError('Image generation failed.');
+        // Reset download button state on error
+        if (downloadBtn) {
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download Image';
+        }
+    }));
+    copyBtn?.addEventListener('click', () => imageGenerator.generateAndCopy().catch(err => {
+        showError('Copy to clipboard failed.');
+        // Reset copy button state on error
+        if (copyBtn) {
+            copyBtn.disabled = false;
+            copyBtn.innerHTML = `
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy Image
+            `;
+        }
+    }));
     templateToggle?.addEventListener('click', () => templateManager.openModal());
     optionsToggle?.addEventListener('click', () => toggleAccordion(optionsContent, optionsIcon, optionsToggle));
 
@@ -79,7 +98,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function fetchFediversePost() {
-        if (eventSource) eventSource.close();
+        // Properly cleanup existing EventSource
+        if (eventSource) {
+            try {
+                const oldEventSource = eventSource;
+                eventSource = null; // Clear reference immediately
+
+                // Remove event listeners before closing
+                oldEventSource.onopen = null;
+                oldEventSource.onmessage = null;
+                oldEventSource.onerror = null;
+
+                // Check state before closing
+                if (oldEventSource.readyState !== EventSource.CLOSED) {
+                    oldEventSource.close();
+                }
+            } catch (error) {
+                console.warn('Error closing previous EventSource:', error);
+            }
+        }
 
         // Reset image tracking state
         loadedImageUrls.clear();
@@ -211,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (previewStatus) {
                     previewStatus.textContent = `Loading images (${processedCount}/${totalImages})...`;
+                    previewStatus.className = 'text-sm text-yellow-600';
                 }
 
                 // Check if all required images have been processed (loaded or failed)
@@ -242,6 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Now render everything at once with all images loaded
                 renderPreview();
 
+                // Show preview content with fade-in effect
+                setPreviewState('content');
+
                 if (previewStatus && previewStatus.textContent?.includes('Loading')) {
                     previewStatus.textContent = 'Preview loaded successfully';
                     previewStatus.className = 'text-sm text-green-600';
@@ -253,15 +294,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
-                // Don't immediately call handleStreamEnd, let it retry naturally
-                // Only clean up after multiple consecutive failures
-                if (!eventSource) return; // Already cleaned up
+
+                const currentEventSource = eventSource;
+                if (!currentEventSource) return; // Already cleaned up
+
+                // Check connection state
+                if (currentEventSource.readyState === EventSource.CLOSED) {
+                    eventSource = null;
+                    return; // Connection already closed
+                }
 
                 try {
-                    eventSource.close();
-                    eventSource.onopen = null;
-                    eventSource.onmessage = null;
-                    eventSource.onerror = null;
+                    currentEventSource.close();
+                    currentEventSource.onopen = null;
+                    currentEventSource.onmessage = null;
+                    currentEventSource.onerror = null;
                 } catch (e) {
                     console.warn('Error during EventSource cleanup:', e);
                 } finally {
@@ -411,6 +458,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = contentHTML;
+
+        // Fix Mastodon's link display: unwrap .invisible and .ellipsis spans to show full URLs
+        tempDiv.querySelectorAll('a').forEach(link => {
+            const allSpans = Array.from(link.querySelectorAll('span.invisible, span.ellipsis'));
+            allSpans.forEach(span => {
+                const textNode = document.createTextNode(span.textContent || '');
+                span.parentNode?.replaceChild(textNode, span);
+            });
+        });
 
         // Keep links in their original format for natural appearance
         tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => {
@@ -743,7 +799,33 @@ document.addEventListener('DOMContentLoaded', () => {
             bottomSection.style.paddingTop = showBottom ? '1rem' : '0';
         }
     }
-    function setPreviewState(state: 'loading' | 'content' | 'error') { if(loader) loader.classList.add('hidden'); if(styleAContainer) styleAContainer.classList.add('hidden'); if(state === 'loading' && loader) { loader.classList.remove('hidden'); if(previewStatus) previewStatus.textContent = 'Loading...'; } else if(state === 'content' && styleAContainer) { styleAContainer.classList.remove('hidden'); } else if (state === 'error' && previewStatus) { if(previewStatus) previewStatus.textContent = 'Error loading preview'; if(previewStatus) previewStatus.className = 'text-sm text-red-600'; } }
+    function setPreviewState(state: 'loading' | 'content' | 'error') {
+        if (state === 'loading') {
+            if (previewStatus) previewStatus.textContent = 'Loading...';
+            if (styleAContainer) {
+                styleAContainer.classList.remove('hidden');
+                styleAContainer.classList.add('flex', 'flex-col');
+            }
+            if (loader) {
+                loader.classList.remove('hidden');
+            }
+        } else if (state === 'content') {
+            if (loader) {
+                loader.classList.add('hidden');
+            }
+            if (styleAContainer) {
+                styleAContainer.classList.remove('hidden');
+                styleAContainer.classList.add('flex', 'flex-col');
+            }
+        } else if (state === 'error') {
+            if (previewStatus) {
+                previewStatus.textContent = 'Error loading preview';
+                previewStatus.className = 'text-sm text-red-600';
+            }
+            if (loader) loader.classList.add('hidden');
+            if (styleAContainer) styleAContainer.classList.add('hidden');
+        }
+    }
     function setGenerateButtonState(isLoading: boolean) { if(generateBtn) { generateBtn.disabled = isLoading; generateBtn.textContent = isLoading ? 'Fetching...' : 'Generate Preview'; } }
     function showError(message: string, detail?: string) {
         const fullMessage = detail ? `${message}\n${detail}` : message;
