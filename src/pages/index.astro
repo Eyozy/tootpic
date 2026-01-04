@@ -21,7 +21,7 @@ import { Image } from 'astro:assets';
         </header>
 
         <!-- URL Input Section -->
-        <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 w-full">
+        <section class="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-200/80 p-6 sm:p-8 w-full backdrop-blur-sm">
             <div class="space-y-6">
                 <div>
                     <label for="mastodon-url" class="block text-sm font-normal text-gray-900 mb-3">
@@ -37,7 +37,7 @@ import { Image } from 'astro:assets';
                             type="text"
                             id="mastodon-url"
                             name="mastodon-url"
-                            placeholder="Paste any Fediverse post URL (Mastodon, Pixelfed, PeerTube, etc.)"
+                            placeholder="Paste any Fediverse post URL"
                             class="block w-full pl-12 pr-4 py-4 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400"
                             autocomplete="url"
                         >
@@ -48,13 +48,13 @@ import { Image } from 'astro:assets';
                         </button>
                     </div>
                     <div class="mt-4">
-                    <button id="generate-btn" class="w-full bg-blue-500 text-white font-normal py-3 px-6 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-blue-500/25">
+                    <button id="generate-btn" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-normal py-3 px-6 rounded-xl hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-md shadow-blue-500/30">
                         Generate Preview
                     </button>
                 </div>
                 <div id="error-message" class="text-red-600 text-sm mt-3 font-normal" role="alert" aria-live="polite"></div>
-                    <div class="mt-3 text-sm text-gray-600">
-                        <span class="font-medium">Supported platforms:</span> All Mastodon instances, all <a href="https://pixelfed.org" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Pixelfed instances</a>, all <a href="https://joinpeertube.org" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">PeerTube instances</a>, Pleroma, all <a href="https://misskey.io" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Misskey instances</a>, and other ActivityPub-compatible platforms
+                    <div class="mt-3 text-sm text-gray-500">
+                        Supports: <a href="https://instances.social/" target="_blank" rel="noopener noreferrer" class="relative group"><span>Mastodon</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://pixelfed.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>Pixelfed</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://misskey.io" target="_blank" rel="noopener noreferrer" class="relative group"><span>Misskey</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://joinpeertube.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>PeerTube</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · Pleroma & more
                     </div>
                 </div>
                     
@@ -65,7 +65,7 @@ import { Image } from 'astro:assets';
         <!-- Settings Sections -->
         <div class="w-full space-y-5">
             <!-- Template Selection -->
-            <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-md shadow-slate-200/30">
                 <button id="template-toggle" class="w-full flex items-center justify-between p-5">
                     <h2 class="text-base font-semibold text-brand-gray-900">Choose Template</h2>
                     <div class="flex items-center gap-3">
@@ -78,7 +78,7 @@ import { Image } from 'astro:assets';
             </div>
 
             <!-- Content Settings -->
-            <div class="bg-white border border-brand-gray-200 rounded-xl shadow-sm">
+            <div class="bg-white border border-slate-200/80 rounded-xl shadow-md shadow-slate-200/30">
                 <button id="options-toggle" class="w-full flex items-center justify-between p-5" aria-expanded="false" aria-controls="options-content">
                     <h2 class="text-base font-semibold text-brand-gray-900">Content Settings</h2>
                     <svg id="options-icon" class="w-5 h-5 text-brand-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -86,9 +86,14 @@ import { Image } from 'astro:assets';
                     </svg>
                 </button>
                 <div id="options-content" class="accordion-content hidden">
-                    <div class="px-5 pb-5 space-y-4 border-t border-brand-gray-100 pt-5">
+                    <div class="px-5 pb-5 space-y-3 border-t border-brand-gray-100 pt-4">
                         <div class="flex items-center justify-between">
-                            <span class="text-brand-gray-700 pr-4">Show Stats</span>
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                                Show Stats
+                            </span>
                             <label for="stats-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="stats-toggle" value="stats" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -96,7 +101,12 @@ import { Image } from 'astro:assets';
                             </label>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-brand-gray-700 pr-4">Show Timestamp</span>
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Show Timestamp
+                            </span>
                             <label for="timestamp-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="timestamp-toggle" value="timestamp" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -104,7 +114,12 @@ import { Image } from 'astro:assets';
                             </label>
                         </div>
                         <div class="flex items-center justify-between" id="instance-toggle-container">
-                            <span class="text-brand-gray-700 pr-4">Show Instance Name</span>
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                                </svg>
+                                Show Instance Name
+                            </span>
                             <label for="instance-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="instance-toggle" value="instance" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -113,7 +128,12 @@ import { Image } from 'astro:assets';
                         </div>
                         <div class="hidden" id="content-warning-toggle-container">
                             <div class="flex items-center justify-between w-full">
-                            <span class="text-brand-gray-700 pr-4">Show Content Warning</span>
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                Show Content Warning
+                            </span>
                             <label for="content-warning-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="visibility" id="content-warning-toggle" value="contentWarning" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -121,8 +141,13 @@ import { Image } from 'astro:assets';
                             </label>
                             </div>
                         </div>
-                          <div class="flex items-center justify-between">
-                            <span class="text-brand-gray-700 pr-4">Auto-copy Alt Text</span>
+                        <div class="flex items-center justify-between">
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                </svg>
+                                Auto-copy Alt Text
+                            </span>
                             <label for="alt-text-copy-toggle" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="alt-text-copy" id="alt-text-copy-toggle" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -130,7 +155,12 @@ import { Image } from 'astro:assets';
                             </label>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-brand-gray-700 pr-4">Use Original Post Data</span>
+                            <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Use Original Post Data
+                            </span>
                             <label for="use-original-post-data" class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="original-post" id="use-original-post-data" class="sr-only peer" checked>
                                 <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
@@ -199,7 +229,7 @@ import { Image } from 'astro:assets';
                 <!-- Button container - single column on mobile, side-by-side on tablet+ -->
                 <div class="w-full flex flex-col md:flex-row gap-3">
                     <!-- Copy button - only visible on tablet+ -->
-                    <button id="copy-btn" class="max-md:hidden flex bg-green-500 text-white font-normal py-4 px-6 rounded-xl hover:bg-green-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-green-500/25 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none disabled:hover:bg-gray-300 flex-1 items-center justify-center gap-3" disabled>
+                    <button id="copy-btn" class="max-md:hidden flex bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-normal py-4 px-6 rounded-xl hover:from-emerald-600 hover:to-emerald-700 active:scale-[0.98] transition-all duration-200 shadow-md shadow-emerald-500/25 disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none flex-1 items-center justify-center gap-3" disabled>
                         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
@@ -207,7 +237,7 @@ import { Image } from 'astro:assets';
                     </button>
 
                     <!-- Download button -->
-                    <button id="download-btn" class="flex-1 bg-blue-500 text-white font-normal py-4 px-6 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all duration-200 shadow-sm shadow-blue-500/25 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none disabled:hover:bg-gray-300 flex items-center justify-center gap-3" disabled>
+                    <button id="download-btn" class="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-normal py-4 px-6 rounded-xl hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-md shadow-blue-500/25 disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3" disabled>
                         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
