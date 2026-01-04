@@ -1,3 +1,8 @@
+---
+const startYear = 2025;
+const currentYear = new Date().getFullYear();
+const yearDisplay = currentYear > startYear ? `${startYear} - ${currentYear}` : `${startYear}`;
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -68,22 +73,22 @@
     }
     </script>
 </head>
-<body class="bg-brand-gray-50 text-brand-gray-800 font-sans flex flex-col">
+<body class="bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100 text-brand-gray-800 font-sans flex flex-col min-h-screen">
     <div class="flex-grow flex items-center justify-center p-4 py-8 md:py-12">
         <slot />
     </div>
     
-    <footer class="w-full flex justify-center items-center py-4 text-gray-600 flex-shrink-0">
-        <span class="no-nowrap text-xs sm:text-sm md:text-base">
-            &copy; 2025 | Reserved by Eyozy | 
-            <a 
-                href="https://github.com/Eyozy/tootpic" 
-                target="_blank" 
+    <footer class="w-full flex justify-center items-center py-4 text-gray-500 flex-shrink-0">
+        <span class="text-sm">
+            &copy; {yearDisplay} &middot; Reserved by Eyozy &middot;
+            <a
+                href="https://github.com/Eyozy/tootpic"
+                target="_blank"
                 rel="noopener noreferrer"
-                class="relative group no-underline hover:text-gray-800 transition-colors duration-200"
+                class="relative group text-gray-500 hover:text-gray-700 transition-colors duration-200"
             >
-                Source Code
-                <span class="absolute bottom-0 left-0 w-0 h-px bg-gray-800 transition-all duration-300 group-hover:w-full"></span>
+                GitHub
+                <span class="absolute bottom-0 left-0 w-0 h-px bg-gray-700 transition-all duration-300 group-hover:w-full"></span>
             </a>
         </span>
     </footer>
