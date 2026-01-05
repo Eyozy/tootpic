@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep links in their original format for natural appearance
         tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => {
             // Ensure links have proper styling but keep original format
-            link.classList.add('text-blue-600', 'hover:text-blue-800', 'underline');
+            link.classList.add('text-blue-600', 'hover:text-blue-800');
         });
 
         // Style hashtags in content to make them more visible
@@ -808,10 +808,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (loader) {
                 loader.classList.remove('hidden');
+                loader.classList.add('flex');
             }
         } else if (state === 'content') {
             if (loader) {
                 loader.classList.add('hidden');
+                loader.classList.remove('flex');
             }
             if (styleAContainer) {
                 styleAContainer.classList.remove('hidden');
@@ -822,7 +824,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewStatus.textContent = 'Error loading preview';
                 previewStatus.className = 'text-sm text-red-600';
             }
-            if (loader) loader.classList.add('hidden');
+            if (loader) {
+                loader.classList.add('hidden');
+                loader.classList.remove('flex');
+            }
             if (styleAContainer) styleAContainer.classList.add('hidden');
         }
     }

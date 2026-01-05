@@ -189,7 +189,7 @@ export function convertMastodonToUniversal(mastodonData: any): any {
     account: {
       id: mastodonData.account.id,
       username: mastodonData.account.username,
-      displayName: mastodonData.account.display_name,
+      displayName: mastodonData.account.display_name || mastodonData.account.username,
       avatar: mastodonData.account.avatar,
       url: mastodonData.account.url,
       acct: mastodonData.account.acct,
