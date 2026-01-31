@@ -153,6 +153,13 @@ const yearDisplay = currentYear > startYear ? `${startYear} - ${currentYear}` : 
     .content-container p:last-child {
         margin-bottom: 0;
     }
+    /* Ech0 posts are rendered from Markdown into multiple <p> blocks; reduce spacing to avoid "extra blank lines". */
+    .content-container.platform-ech0 p {
+        margin-bottom: 0;
+    }
+    .content-container.platform-ech0 p:last-child {
+        margin-bottom: 0;
+    }
 
     input::placeholder {
         color: #6b7280;

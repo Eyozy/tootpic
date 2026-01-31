@@ -2,6 +2,7 @@ import { domCache } from './domCache';
 import { templateManager } from './templateManager';
 import { API_CONFIG, IMAGE_CONFIG } from '../constants';
 import { snapdom } from '@zumer/snapdom';
+import { mapVideoThumbnailData, formatVideoAlt } from './uiHelpers';
 
 export interface GenerationOptions {
   quality?: number;
@@ -43,7 +44,7 @@ export class ImageGenerator {
     try {
       this.setDownloadButtonState('Preparing...');
 
-      const clone = this.createPreviewClone(originalNode);
+      const clone = await this.createPreviewClone(originalNode);
       const container = this.createTempContainer(clone);
 
       this.setDownloadButtonState('Generating...');
@@ -106,7 +107,7 @@ export class ImageGenerator {
     try {
       this.setCopyButtonState('Preparing...');
 
-      const clone = this.createPreviewClone(originalNode);
+      const clone = await this.createPreviewClone(originalNode);
       const container = this.createTempContainer(clone);
 
       this.setCopyButtonState('Generating...');
@@ -153,11 +154,36 @@ export class ImageGenerator {
     }
   }
 
-  private createPreviewClone(originalNode: Element): HTMLElement {
+  private async createPreviewClone(originalNode: Element): Promise<HTMLElement> {
+    // Before cloning, capture video thumbnails from the original DOM
+    // This ensures we get the generated thumbnails even if they're still loading
+    const originalAttachmentContainer = originalNode.querySelector('#style-a-attachment') as HTMLElement;
+    let videoThumbnailMap: Record<string, string> = {};
+
+    if (originalAttachmentContainer) {
+      const wrappers = originalAttachmentContainer.querySelectorAll(':scope > div');
+      const items: Array<{ attachmentIndex: number; src: string; isVideo: boolean }> = [];
+
+      wrappers.forEach(wrapper => {
+        const el = wrapper as HTMLElement;
+        const idxRaw = el.dataset.attachmentIndex;
+        if (idxRaw === undefined) return;
+        const attachmentIndex = Number(idxRaw);
+        if (!Number.isFinite(attachmentIndex)) return;
+        const mediaType = el.dataset.mediaType || '';
+        const isVideo = mediaType === 'video' || mediaType === 'gifv';
+        const img = el.querySelector('img');
+        const src = (img as HTMLImageElement | null)?.src || '';
+        items.push({ attachmentIndex, src, isVideo });
+      });
+
+      videoThumbnailMap = mapVideoThumbnailData(items);
+    }
+
     const clone = originalNode.cloneNode(true) as HTMLElement;
     clone.classList.remove('preview-card', 'border', 'rounded-xl');
     clone.style.border = '1px solid var(--brand-gray-200, #e5e7eb)';
-    
+
     // [Crucial change] Set border-radius to 0 to remove rounded corners from the downloaded image
     clone.style.borderRadius = '0';
 
@@ -173,11 +199,34 @@ export class ImageGenerator {
     clone.style.visibility = 'visible';
     clone.style.opacity = '1';
 
+    // Apply captured video thumbnails to the clone
+    if (Object.keys(videoThumbnailMap).length > 0) {
+      const cloneAttachmentContainer = clone.querySelector('#style-a-attachment') as HTMLElement;
+      if (cloneAttachmentContainer) {
+        const cloneVideoWrappers = cloneAttachmentContainer.querySelectorAll(':scope > div');
+        cloneVideoWrappers.forEach(wrapper => {
+          const el = wrapper as HTMLElement;
+          const idxRaw = el.dataset.attachmentIndex;
+          if (idxRaw === undefined) return;
+          const thumbnailDataUrl = videoThumbnailMap[idxRaw];
+          if (thumbnailDataUrl) {
+            // Check if this wrapper has a shimmer (still loading)
+            const shimmer = wrapper.querySelector('.shimmer');
+            if (shimmer) {
+              // Replace shimmer with the actual thumbnail
+              const indexNum = Number(idxRaw);
+              wrapper.innerHTML = `<img alt="${formatVideoAlt(indexNum)}" class="w-full h-full object-cover" src="${thumbnailDataUrl}">`;
+            }
+          }
+        });
+      }
+    }
+
     // Handle content warning visibility in image generation
     this.handleContentWarningInImage(clone);
 
     // Handle avatar and media loading states for image generation
-    this.handleMediaLoadingStatesInImage(clone);
+    await this.handleMediaLoadingStatesInImage(clone);
 
     // Clean up potentially problematic images before snapdom processing
     this.cleanupProblematicImages(clone);
@@ -233,7 +282,7 @@ export class ImageGenerator {
   /**
    * Handle avatar and media loading states for clean image generation
    */
-  private handleMediaLoadingStatesInImage(clone: HTMLElement): void {
+  private async handleMediaLoadingStatesInImage(clone: HTMLElement): Promise<void> {
     // Handle avatar loading states
     const avatarContainer = clone.querySelector('#style-a-avatar-container') as HTMLElement;
     if (avatarContainer) {
@@ -298,6 +347,20 @@ export class ImageGenerator {
         shimmer.parentNode?.replaceChild(placeholder, shimmer);
       });
 
+      // Handle video thumbnails - ensure they have proper dimensions for snapdom
+      const videoThumbnails = attachmentContainer.querySelectorAll('img[alt*="Video"]');
+      videoThumbnails.forEach(img => {
+        const htmlImg = img as HTMLImageElement;
+        // Ensure video thumbnails have proper dimensions
+        if (!htmlImg.style.width) {
+          htmlImg.style.width = '100%';
+        }
+        if (!htmlImg.style.height) {
+          htmlImg.style.height = '100%';
+        }
+        htmlImg.style.objectFit = 'cover';
+      });
+
       // Ensure attachment container has proper styling
       attachmentContainer.style.display = 'grid';
       attachmentContainer.style.visibility = 'visible';
@@ -308,6 +371,39 @@ export class ImageGenerator {
         attachmentContainer.style.display = 'none';
       }
     }
+
+    // Replace any remaining shimmer placeholders (e.g. link cards inserted into content)
+    // with a static placeholder so snapdom doesn't capture an empty/transparent frame.
+    const remainingShimmers = clone.querySelectorAll('.shimmer');
+    remainingShimmers.forEach(shimmer => {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'w-full h-full bg-gray-200 flex items-center justify-center text-gray-400';
+      placeholder.innerHTML = `
+        <div class="text-center">
+          <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          <p class="text-xs">Loading...</p>
+        </div>
+      `;
+      shimmer.parentNode?.replaceChild(placeholder, shimmer);
+    });
+
+    // Wait for all images to load (including video thumbnails)
+    const allImages = clone.querySelectorAll('img');
+    const imageLoadPromises = Array.from(allImages).map(img => {
+      return new Promise<void>((resolve) => {
+        if (img.complete && img.naturalWidth > 0) {
+          resolve();
+        } else {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          // Timeout after 2 seconds to avoid hanging
+          setTimeout(() => resolve(), 2000);
+        }
+      });
+    });
+    await Promise.all(imageLoadPromises);
 
     // Ensure all images in the clone are properly sized and loaded
     const images = clone.querySelectorAll('img');
@@ -334,6 +430,14 @@ export class ImageGenerator {
       // Ensure content doesn't flow behind avatar
       contentContainer.style.marginLeft = '0';
       contentContainer.style.overflow = 'visible';
+    }
+
+    const tagsContainer = clone.querySelector('#tags-container') as HTMLElement;
+    if (tagsContainer) {
+      tagsContainer.style.visibility = 'visible';
+      tagsContainer.style.opacity = '1';
+      // Match runtime: hide when empty, show when populated.
+      tagsContainer.style.display = tagsContainer.children.length > 0 ? 'block' : 'none';
     }
 
     const displayNameContainer = clone.querySelector('#style-a-display-name') as HTMLElement;

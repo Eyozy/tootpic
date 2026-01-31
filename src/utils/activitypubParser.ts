@@ -473,11 +473,10 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
           }
         }
 
-        // If still no preview, derive from video URL
-        if (!previewUrl && attachmentUrl && typeof attachmentUrl === 'string') {
+        // If still no preview, derive from video URL (skip for Ech0 to avoid fake thumbnails)
+        if (!previewUrl && attachmentUrl && typeof attachmentUrl === 'string' && platform !== 'ech0') {
           // Pixelfed pattern: video.mp4 -> video_thumb.jpeg
           previewUrl = attachmentUrl.replace(/\.mp4$/i, '_thumb.jpeg');
-          
         }
       }
 

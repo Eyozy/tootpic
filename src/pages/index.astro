@@ -52,9 +52,9 @@ import { Image } from 'astro:assets';
                         Generate Preview
                     </button>
                 </div>
-                <div id="error-message" class="text-red-600 text-sm mt-3 font-normal" role="alert" aria-live="polite"></div>
+                <div id="error-message" class="text-red-600 text-sm mt-3 font-normal transition-all duration-500 ease-in-out opacity-0 max-h-0 overflow-hidden" role="alert" aria-live="polite"></div>
                     <div class="mt-3 text-sm text-gray-500">
-                        Supports: <a href="https://instances.social/" target="_blank" rel="noopener noreferrer" class="relative group"><span>Mastodon</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://pixelfed.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>Pixelfed</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://misskey.io" target="_blank" rel="noopener noreferrer" class="relative group"><span>Misskey</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://joinpeertube.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>PeerTube</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · Pleroma & more
+                        Supports: <a href="https://instances.social/" target="_blank" rel="noopener noreferrer" class="relative group"><span>Mastodon</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://pixelfed.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>Pixelfed</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://misskey.io" target="_blank" rel="noopener noreferrer" class="relative group"><span>Misskey</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://github.com/lin-snow/Ech0" target="_blank" rel="noopener noreferrer" class="relative group"><span>Ech0</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · <a href="https://joinpeertube.org" target="_blank" rel="noopener noreferrer" class="relative group"><span>PeerTube</span><span class="absolute bottom-0 left-0 w-0 h-px bg-gray-500 transition-all duration-300 group-hover:w-full"></span></a> · Pleroma & more
                     </div>
                 </div>
                     
@@ -192,15 +192,16 @@ import { Image } from 'astro:assets';
                                 <div id="style-a-username" class="text-sm text-secondary whitespace-nowrap overflow-hidden text-ellipsis"></div>
                             </div>
                         </div>
-                        <div id="content-warning-banner" class="content-warning-cw hidden">
-                            <span id="content-warning-text" class="cw-text"></span>
-                        </div>
-                        <div id="style-a-content" class="text-primary text-base flex-grow content-container"></div>
-                        <div id="tags-container" class="mt-3 hidden"></div>
-                        <div id="style-a-attachment" class="mt-3 rounded-lg overflow-hidden border bg-gray-100"></div>
-                        <div id="bottom-section" class="mt-4 pt-4 border-t">
-                            <div id="style-a-timestamp" class="text-sm text-secondary"></div>
-                            <div id="style-a-stats" class="flex items-center space-x-6 text-secondary text-sm mt-3">
+	                        <div id="content-warning-banner" class="content-warning-cw hidden">
+	                            <span id="content-warning-text" class="cw-text"></span>
+	                        </div>
+	                        <div id="style-a-content" class="text-primary text-base flex-grow content-container"></div>
+	                        <div id="tags-container" class="mt-1 hidden"></div>
+	                        <div id="style-a-extension" class="mt-3 hidden"></div>
+	                        <div id="style-a-attachment" class="mt-3 rounded-lg overflow-hidden border bg-gray-100"></div>
+	                        <div id="bottom-section" class="mt-4 pt-4 border-t">
+	                            <div id="style-a-timestamp" class="text-sm text-secondary"></div>
+	                            <div id="style-a-stats" class="flex items-center space-x-6 text-secondary text-sm mt-3">
                                 <span class="flex items-center group">
                                     <svg class="w-5 h-5 mr-2 text-gray-400 group-hover:text-blue-500 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
