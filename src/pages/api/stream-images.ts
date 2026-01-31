@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { parseEncodedUrlList } from '../../utils/netHelpers';
 
 // This must be set to false for GET requests with query params to work correctly in production.
 export const prerender = false;
@@ -17,7 +18,11 @@ const IMAGE_LIMITS = {
  * @param timeout Timeout in milliseconds
  * @returns Object containing original URL and converted Data URL, or failed marker
  */
-async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promise<{ url: string, dataUrl: string }> {
+async function imageToBase64(
+  url: string,
+  timeout = IMAGE_LIMITS.TIMEOUT,
+  opts: { allowSameOrigin?: string } = {},
+): Promise<{ url: string, dataUrl: string }> {
   
   try {
     const urlObj = new URL(url);
@@ -27,6 +32,8 @@ async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promi
 
     
     const hostname = urlObj.hostname.toLowerCase();
+    const allowSameOrigin = typeof opts.allowSameOrigin === 'string' ? opts.allowSameOrigin : '';
+    const isSameOrigin = !!allowSameOrigin && urlObj.origin === allowSameOrigin;
     const internalPatterns = [
       /^localhost$/i,
       /^127\./,
@@ -39,12 +46,13 @@ async function imageToBase64(url: string, timeout = IMAGE_LIMITS.TIMEOUT): Promi
       /^fc00:/,
       /^fe80:/
     ];
-    if (internalPatterns.some(pattern => pattern.test(hostname))) {
+    if (!isSameOrigin && internalPatterns.some(pattern => pattern.test(hostname))) {
       return { url, dataUrl: 'failed' };
     }
 
-    
-    if (/[<>'"&]/.test(url)) {
+    // NOTE: '&' is valid in query strings (e.g. /api/video-thumbnail?url=...&t=...).
+    // Only reject characters that can cause HTML/attribute injection.
+    if (/[<>'"]/.test(url)) {
       return { url, dataUrl: 'failed' };
     }
   } catch {
@@ -123,7 +131,8 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
 
-    const rawUrls = imageUrlsParam.split(',').map(url => decodeURIComponent(url.trim())).filter(Boolean);
+    let rawUrls = parseEncodedUrlList(imageUrlsParam);
+    const serverOrigin = new URL(request.url).origin;
 
     // Increased limit to support posts with many custom emojis
     // Typical case: 1 avatar + 4 images + 20+ emojis = 25+ URLs
@@ -146,6 +155,7 @@ export const GET: APIRoute = async ({ request }) => {
 
         
         const hostname = urlObj.hostname.toLowerCase();
+        const isSameOrigin = urlObj.origin === serverOrigin;
         const internalPatterns = [
           /^localhost$/i,
           /^127\./,
@@ -158,10 +168,10 @@ export const GET: APIRoute = async ({ request }) => {
           /^fc00:/,
           /^fe80:/
         ];
-        if (internalPatterns.some(pattern => pattern.test(hostname))) continue;
+        if (!isSameOrigin && internalPatterns.some(pattern => pattern.test(hostname))) continue;
 
-        
-        if (/[<>'"&]/.test(url)) continue;
+        // NOTE: '&' is valid in URLs; do not block it.
+        if (/[<>'"]/.test(url)) continue;
 
         imageUrls.push(url);
       } catch {
@@ -208,7 +218,7 @@ export const GET: APIRoute = async ({ request }) => {
         for (let i = 0; i < imageUrls.length; i += BATCH_SIZE) {
           const batch = imageUrls.slice(i, i + BATCH_SIZE);
           const promises = batch.map(url =>
-            imageToBase64(url).then(result => {
+            imageToBase64(url, IMAGE_LIMITS.TIMEOUT, { allowSameOrigin: serverOrigin }).then(result => {
               // Send each result back as soon as it's ready
               sendEvent(result);
             }).catch(() => {

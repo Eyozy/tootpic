@@ -54,6 +54,7 @@ export const DOM_ELEMENT_IDS = {
     DISPLAY_NAME: 'style-a-display-name',
     USERNAME: 'style-a-username',
     CONTENT: 'style-a-content',
+    EXTENSION: 'style-a-extension',
     ATTACHMENT: 'style-a-attachment',
     BOTTOM_SECTION: 'bottom-section',
     TIMESTAMP: 'style-a-timestamp',

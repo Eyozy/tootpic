@@ -3,7 +3,35 @@ import { imageGenerator } from './imageGenerator';
 import { domCache } from './domCache';
 import { DOM_ELEMENT_IDS } from '../constants';
 import { FediverseClient } from './fediverseClient';
+import { renderMarkdownToHtml } from './markdownRender';
+import { detectsMarkdown, computeMediaGridStyle } from './uiHelpers';
 import type { FediversePost, FediverseAttachment, FediversePoll } from '../types/activitypub';
+import DOMPurify from 'dompurify';
+
+/**
+ * Safely sanitize HTML content to prevent XSS attacks
+ */
+function sanitizeHtml(html: string): string {
+    return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br', 'span', 'div',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+            'img', 'video', 'audio', 'source'
+        ],
+        ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'src', 'alt'],
+        ALLOW_DATA_ATTR: false
+    });
+}
+
+/**
+ * Escape HTML special characters to prevent XSS when inserting as text
+ */
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 interface PrefetchedMetaData {
     postData: FediversePost;
@@ -37,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentWarningText = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TEXT) as HTMLSpanElement;
     const contentWarningToggle = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
     const contentWarningToggleContainer = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
+    const extensionContainer = domCache.getElement(DOM_ELEMENT_IDS.EXTENSION) as HTMLDivElement;
 
     let postData: FediversePost | null = null;
     let fetchedInstance = '';
@@ -83,8 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
     templateToggle?.addEventListener('click', () => templateManager.openModal());
     optionsToggle?.addEventListener('click', () => toggleAccordion(optionsContent, optionsIcon, optionsToggle));
 
-    
-    document.addEventListener('templateSelected', () => {
+
+    // Listen for template change events from templateManager
+    document.addEventListener('templateChanged', () => {
         if (postData) renderPreview();
     });
 
@@ -172,14 +202,54 @@ document.addEventListener('DOMContentLoaded', () => {
             // Extract instance domain from response or URL
             fetchedInstance = responseData.fetchedInstance || new URL(url).hostname;
 
+            // Show/hide content warning controls based on post sensitivity
+            if (contentWarningToggleContainer && postData) {
+                if (postData.sensitive || postData.spoilerText) {
+                    contentWarningToggleContainer.classList.remove('hidden');
+                } else {
+                    contentWarningToggleContainer.classList.add('hidden');
+                }
+            }
+
             // If we already have image URLs from the server, use them
             let imageUrls: string[] = [];
+            const origin = window.location.origin;
+            const collectVideoThumbUrls = (post: FediversePost | null): string[] => {
+                if (!post) return [];
+                return post.attachments.flatMap(att => {
+                    if (att.type !== 'video' && att.type !== 'gifv') return [];
+                    if (att.previewUrl) return [att.previewUrl];
+                    if (typeof att.url === 'string' && att.url) {
+                        return [`${origin}/api/video-thumbnail?url=${encodeURIComponent(att.url)}&t=0.8`];
+                    }
+                    return [];
+                });
+            };
+
             if (responseData.imageUrls && responseData.imageUrls.length > 0) {
                 imageUrls = responseData.imageUrls;
+                // Ensure video thumbnails are included so preview waits for them.
+                const videoThumbs = collectVideoThumbUrls(postData);
+                if (videoThumbs.length > 0) {
+                    const existing = new Set(imageUrls);
+                    for (const url of videoThumbs) {
+                        if (!existing.has(url)) imageUrls.push(url);
+                    }
+                }
             } else if (postData) {
                 // Otherwise collect image URLs from the post data
                 imageUrls = [
-                    ...postData.attachments.map(att => att.url),
+                    ...postData.attachments.flatMap(att => {
+                        if (att.type === 'image') return [att.url];
+                        if (att.type === 'video' || att.type === 'gifv') {
+                            if (att.previewUrl) return [att.previewUrl];
+                            // No preview yet: use server thumbnail endpoint to avoid CORS video fetch
+                            if (typeof att.url === 'string' && att.url) {
+                                return [`${origin}/api/video-thumbnail?url=${encodeURIComponent(att.url)}&t=0.8`];
+                            }
+                        }
+                        return [];
+                    }),
                     ...(postData.account.avatar ? [postData.account.avatar] : []),
                     ...postData.account.emojis.map(emoji => emoji.url)
                 ].flat().filter(Boolean) as string[];
@@ -226,7 +296,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewStatus.textContent = `Loading images (0/${imageUrls.length})...`;
             }
 
-            const encodedUrls = encodeURIComponent(imageUrls.join(','));
+            // IMPORTANT: stream-images expects each URL to be encoded, then joined with commas.
+            // Do not encode the whole joined string, or commas become %2C and cannot be split server-side.
+            const encodedUrls = imageUrls.map(u => encodeURIComponent(u)).join(',');
             eventSource = new EventSource(`/api/stream-images?urls=${encodedUrls}`);
             let loadedImages = 0;
             const totalImages = imageUrls.length;
@@ -273,12 +345,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Reset render state before final render
+                // Reset render state first to ensure fresh start
                 isRendering = false;
                 pendingRender = false;
 
                 // Now render everything at once with all images loaded
-                renderPreview();
+                // Wrap in try-catch to prevent state corruption on render errors
+                try {
+                    renderPreview();
+                } catch (renderError) {
+                    console.error('Preview render failed:', renderError);
+                    showError('Failed to render preview. Please try again.');
+                }
 
                 // Show preview content with fade-in effect
                 setPreviewState('content');
@@ -334,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     handleStreamEnd();
                 }
             };
-            
+
         } catch (error) {
             showError(error instanceof Error ? error.message : 'An unknown error occurred');
             postData = null;
@@ -342,13 +420,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    
+
     /**
      * Renders the entire preview card based on the current postData and visibility settings.
      * This function is the single source of truth for updating the preview UI.
      */
     function renderPreview() {
-        if (!postData || !styleAContainer) return;
+        if (!postData || !styleAContainer) {
+            // Reset render state on early return to prevent deadlock
+            isRendering = false;
+            return;
+        }
 
         // Prevent concurrent rendering
         if (isRendering) {
@@ -456,8 +538,133 @@ document.addEventListener('DOMContentLoaded', () => {
             contentHTML = `<div class="text-xl font-bold mb-3">${videoTitle}</div>`;
         }
 
+        // If content is Markdown (including HTML-wrapped Markdown), render it so the preview matches site output.
+        if (typeof contentHTML === 'string') {
+            const looksLikeHtmlTag = /<\/?[a-z][\w:-]*\b[^>]*>/i.test(contentHTML);
+            const markdownHint = (text: string) => detectsMarkdown(text);
+
+            if (!looksLikeHtmlTag && markdownHint(contentHTML)) {
+                // Plain text / Markdown: render it (also linkifies bare URLs).
+                contentHTML = renderMarkdownToHtml(contentHTML, { preferLinkHref: sourcePost.platform === 'ech0' });
+            } else if (looksLikeHtmlTag) {
+                // HTML-wrapped content: if it still looks like Markdown after stripping tags, re-render from textContent.
+                const probe = document.createElement('div');
+                probe.innerHTML = contentHTML;
+                const text = (probe.textContent || '').replace(/\r\n?/g, '\n');
+                const hasRichTags = /<(a|img|video|audio|ul|ol|li|blockquote|code|pre|strong|em|br)\b/i.test(contentHTML);
+
+                if (hasRichTags) {
+                    // Keep original HTML if it already contains rich elements.
+                } else if (markdownHint(contentHTML)) {
+                    // Render from original string to preserve inline HTML like <font>.
+                    contentHTML = renderMarkdownToHtml(contentHTML, { preferLinkHref: sourcePost.platform === 'ech0' });
+                } else if (markdownHint(text)) {
+                    contentHTML = renderMarkdownToHtml(text, { preferLinkHref: sourcePost.platform === 'ech0' });
+                }
+            }
+        }
+
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = contentHTML;
+        tempDiv.innerHTML = sanitizeHtml(contentHTML);
+
+        // Ech0 HTML output doesn't include Tailwind classes, so headings/code blocks can look like plain text.
+        // Normalize common rich-text tags for better preview + snapdom output.
+        if (sourcePost.platform === 'ech0') {
+            tempDiv.querySelectorAll('h1').forEach(el => el.classList.add('mt-3', 'mb-1', 'text-xl', 'font-bold'));
+            tempDiv.querySelectorAll('h2').forEach(el => el.classList.add('mt-3', 'mb-1', 'text-lg', 'font-bold'));
+            tempDiv.querySelectorAll('h3').forEach(el => el.classList.add('mt-2', 'mb-1', 'text-base', 'font-semibold'));
+            tempDiv.querySelectorAll('h4,h5,h6').forEach(el => el.classList.add('mt-2', 'mb-1', 'text-sm', 'font-semibold'));
+            tempDiv.querySelectorAll('p').forEach(el => el.classList.add('leading-relaxed'));
+            tempDiv.querySelectorAll('pre').forEach(el => el.classList.add('mt-2', 'mb-2', 'p-3', 'rounded', 'bg-gray-100', 'overflow-x-auto'));
+            tempDiv.querySelectorAll('code').forEach(el => el.classList.add('font-mono', 'text-sm'));
+            tempDiv.querySelectorAll('blockquote').forEach(el => el.classList.add('border-l-4', 'border-gray-300', 'pl-3', 'text-gray-700'));
+            tempDiv.querySelectorAll('ul').forEach(el => el.classList.add('list-disc', 'pl-5'));
+            tempDiv.querySelectorAll('ol').forEach(el => el.classList.add('list-decimal', 'pl-5'));
+        }
+
+        // Ech0 may include plain-text URLs (or markdown links) inside HTML without <a>.
+        // Linkify text nodes so URLs are visible/styled in the final snapdom image.
+        if (sourcePost.platform === 'ech0') {
+            const textContent = tempDiv.textContent || '';
+            const maybeHasUrlOrMdLink = /\bhttps?:\/\//i.test(textContent) || /\[[^\]]+?\]\((https?:\/\/[^)]+?)\)/i.test(textContent);
+
+            if (maybeHasUrlOrMdLink) {
+                const normalizeUrl = (rawUrl: string) => {
+                    let url = rawUrl.trim();
+                    // Trim common trailing punctuation, keeping balanced parentheses.
+                    url = url.replace(/[.,;:!?]+$/, '');
+                    while (url.endsWith(')')) {
+                        const opens = (url.match(/\(/g) || []).length;
+                        const closes = (url.match(/\)/g) || []).length;
+                        if (closes > opens) url = url.slice(0, -1);
+                        else break;
+                    }
+                    return url;
+                };
+
+                const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT);
+                const textNodes: Text[] = [];
+                let node: Node | null;
+
+                while ((node = walker.nextNode())) {
+                    if (node.nodeType !== Node.TEXT_NODE) continue;
+                    const tn = node as Text;
+                    const parent = tn.parentElement;
+                    if (!parent) continue;
+                    const tag = parent.tagName.toLowerCase();
+                    if (tag === 'a' || tag === 'code' || tag === 'pre' || tag === 'script' || tag === 'style') continue;
+                    textNodes.push(tn);
+                }
+
+                // Handle Markdown links and bare URLs, including URLs with parentheses.
+                const mdOrUrl = /\[([^\]]+?)\]\((https?:\/\/[^\s]+?)\)|\bhttps?:\/\/[^\s<>"']+/gi;
+                for (const tn of textNodes) {
+                    const raw = tn.nodeValue || '';
+                    if (!mdOrUrl.test(raw)) continue;
+                    mdOrUrl.lastIndex = 0;
+
+                    const frag = document.createDocumentFragment();
+                    let last = 0;
+                    let m: RegExpExecArray | null;
+
+                    while ((m = mdOrUrl.exec(raw)) !== null) {
+                        if (m.index > last) frag.appendChild(document.createTextNode(raw.slice(last, m.index)));
+
+                        if (m[2]) {
+                            // Markdown link: [text](url)
+                            const href = normalizeUrl(m[2]);
+                            const a = document.createElement('a');
+                            a.href = href;
+                            a.target = '_blank';
+                            a.rel = 'nofollow noopener noreferrer';
+                            a.classList.add('url');
+                            a.textContent = href;
+                            frag.appendChild(a);
+                        } else {
+                            // Bare URL
+                            const href = normalizeUrl(m[0]);
+                            const a = document.createElement('a');
+                            a.href = href;
+                            a.target = '_blank';
+                            a.rel = 'nofollow noopener noreferrer';
+                            a.classList.add('url');
+                            a.textContent = href;
+                            frag.appendChild(a);
+                        }
+
+                        last = m.index + m[0].length;
+                    }
+
+                    if (last < raw.length) frag.appendChild(document.createTextNode(raw.slice(last)));
+                    tn.parentNode?.replaceChild(frag, tn);
+                }
+            }
+        }
+
+        // Remove a11y-only helper text to avoid duplicate visible text
+        tempDiv.querySelectorAll('.sr-only, .sr-only-focusable, .visually-hidden, .visuallyhidden, .screen-reader-text, .a11y-only').forEach(node => {
+            node.parentNode?.removeChild(node);
+        });
 
         // Fix Mastodon's link display: unwrap .invisible and .ellipsis spans to show full URLs
         tempDiv.querySelectorAll('a').forEach(link => {
@@ -470,9 +677,81 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Keep links in their original format for natural appearance
         tempDiv.querySelectorAll('a:not(.mention):not(.hashtag)').forEach(link => {
-            // Ensure links have proper styling but keep original format
+            // Ensure links have proper styling
             link.classList.add('text-blue-600', 'hover:text-blue-800');
         });
+
+        // Ech0: show real URLs and remove adjacent duplicates caused by cards/titles.
+        if (sourcePost.platform === 'ech0') {
+            // Keep Bilibili links as plain text; linkCards are not rendered as cards.
+
+            const normalizeForDedupe = (href: string) => {
+                try {
+                    const u = new URL(href);
+                    // Remove hash only; keep other params to avoid over-normalization.
+                    u.hash = '';
+                    return u.toString();
+                } catch {
+                    return href.trim();
+                }
+            };
+
+            // Collect links and keep original text; avoid aggressive dedupe.
+            const links = Array.from(tempDiv.querySelectorAll<HTMLAnchorElement>('a:not(.mention):not(.hashtag)'));
+
+            for (const link of links) {
+                const href = link.href || '';
+                if (!href) continue;
+
+                // Preserve descriptive link text when available.
+                const currentText = link.textContent?.trim() || '';
+                const isUrlOnly = currentText === href ||
+                    currentText.startsWith('http') ||
+                    currentText.length < 5; // Very short text is likely truncated.
+
+                // Replace with full URL only when text is a URL or clearly invalid.
+                if (isUrlOnly) {
+                    link.textContent = href;
+                }
+                // Otherwise keep the original text.
+            }
+
+            // Ech0: do not render extension as a card; keep it as plain text links.
+
+            // Ech0: remove adjacent duplicate links (same href + text) to avoid a11y duplication.
+            const removeAdjacentDuplicateLinks = (root: HTMLElement) => {
+                const parents = Array.from(root.querySelectorAll<HTMLElement>('*'));
+                parents.push(root);
+
+                for (const parent of parents) {
+                    const children = Array.from(parent.childNodes);
+                    for (let i = 0; i < children.length - 1; i++) {
+                        const current = children[i];
+                        if (!(current instanceof HTMLAnchorElement)) continue;
+
+                        // Skip whitespace text nodes between anchors
+                        let j = i + 1;
+                        while (j < children.length && children[j].nodeType === Node.TEXT_NODE && !children[j].nodeValue?.trim()) {
+                            j++;
+                        }
+                        if (j >= children.length) break;
+
+                        const next = children[j];
+                        if (!(next instanceof HTMLAnchorElement)) continue;
+
+                        const sameHref = (current.href || '') === (next.href || '');
+                        const sameText = (current.textContent || '').trim() === (next.textContent || '').trim();
+                        if (sameHref && sameText) {
+                            next.parentNode?.removeChild(next);
+                            // Keep index at current to catch consecutive duplicates
+                            children.splice(j, 1);
+                        }
+                    }
+                }
+            };
+
+            removeAdjacentDuplicateLinks(tempDiv);
+        }
 
         // Style hashtags in content to make them more visible
         tempDiv.querySelectorAll('a.hashtag').forEach(hashtag => {
@@ -511,13 +790,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
         contentHTML = replaceEmojis(contentHTML, allEmojis);
 
-        let displayNameHTML = sourcePost.account.displayName;
+        // Escape displayName first, then apply emoji replacement
+        let displayNameHTML = escapeHtml(sourcePost.account.displayName || '');
         displayNameHTML = replaceEmojis(displayNameHTML, sourcePost.account.emojis || []);
 
-        
+
 
         // --- 2.5 Process Tags ---
-        // Tags are already in the content HTML with proper styling
+        // Render hashtags into the dedicated tags container so they reliably show up in the image.
+        const tagsContainer = document.getElementById('tags-container') as HTMLDivElement | null;
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+            tagsContainer.classList.add('hidden');
+
+            const hashtagTags = Array.isArray(sourcePost.tags) ? sourcePost.tags.filter(t => t.type === 'hashtag') : [];
+            if (hashtagTags.length > 0) {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex flex-wrap gap-1';
+
+                hashtagTags.slice(0, 12).forEach(t => {
+                    const a = document.createElement('a');
+                    a.href = t.url;
+                    a.target = '_blank';
+                    a.rel = 'nofollow noopener noreferrer';
+                    a.textContent = t.name;
+                    a.className = 'inline-block text-blue-600 hover:text-blue-800 font-medium hashtag';
+                    wrap.appendChild(a);
+                });
+
+                tagsContainer.appendChild(wrap);
+                tagsContainer.classList.remove('hidden');
+            }
+        }
+
+        // --- 2.6 Ech0 Extension (MUSIC/VIDEO/WEBSITE/...) ---
+        // Do not render extension as a card; append the extension URL to content as a link.
+        const ext = (sourcePost as any).extension as { type?: string; url?: string } | undefined;
+        const extUrl = typeof ext?.url === 'string' ? ext.url.trim() : '';
+
+        if (sourcePost.platform === 'ech0' && extUrl) {
+            // Skip if the content already contains this URL.
+            const contentHasUrl = tempDiv.textContent?.includes(extUrl) ||
+                                  tempDiv.innerHTML?.includes(extUrl);
+
+            if (!contentHasUrl) {
+                // Append the extension URL as a link at the end of content.
+                const lineBreak = document.createElement('br');
+                tempDiv.appendChild(lineBreak);
+
+                const extLink = document.createElement('a');
+                extLink.href = extUrl;
+                extLink.target = '_blank';
+                extLink.rel = 'nofollow noopener noreferrer';
+                extLink.classList.add('url', 'text-blue-600', 'hover:text-blue-800', 'mt-1', 'inline-block');
+                extLink.textContent = extUrl;
+                tempDiv.appendChild(extLink);
+            }
+        }
+
+        // Update contentHTML with extension modifications.
+        contentHTML = tempDiv.innerHTML;
+
+        if (extensionContainer) {
+            extensionContainer.innerHTML = '';
+            extensionContainer.classList.add('hidden');
+            extensionContainer.className = 'mt-3 hidden';
+        }
 
         // --- 2. Render User and Content Information ---
         // Render the user's avatar, display name, and username FIRST (before content)
@@ -526,7 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Use the real user avatar directly
         if (sourcePost.account.avatar) {
-            
+
 
             // If we have the avatar loaded from imageMap, use it
             if (imageMap[sourcePost.account.avatar] && imageMap[sourcePost.account.avatar] !== 'failed') {
@@ -534,11 +872,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // If avatar loading failed or not in imageMap yet, try direct URL
             else {
-                
+
                 avatarHTML = `<img class="w-12 h-12 rounded-lg object-cover" alt="Avatar" src="${sourcePost.account.avatar}" onerror="this.style.display='none'">`;
             }
         } else {
-            
+
             avatarHTML = `<div class="w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-medium">?</div>`;
         }
 
@@ -556,9 +894,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const instancePart = acct.includes('@') ? acct.split('@').slice(1).join('@') : fetchedInstance;
         usernameEl.textContent = visibility.instance && instancePart ? `@${usernamePart}@${instancePart}` : `@${usernamePart}`;
 
-    
-        // Inject the processed content into the DOM AFTER user info is rendered
-        (domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement).innerHTML = contentHTML;
+
+        // Inject the processed content into the DOM AFTER user info is rendered.
+        // Ech0 Markdown renderer outputs multiple <p> blocks; our global stylesheet gives <p> a large bottom margin
+        // which can look like "extra blank lines" in the generated image. Tag the container so CSS can tune spacing.
+        const contentEl = domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
+        contentEl.classList.toggle('platform-ech0', sourcePost.platform === 'ech0');
+        contentEl.innerHTML = sanitizeHtml(contentHTML);
 
         // --- 3. Render Media and Footer ---
         // Render media attachments like images and videos.
@@ -594,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => renderPreview(), 0);
         }
     }
-    
+
     /**
      * Renders media attachments (images/videos) into the preview card.
      * @param attachments - The list of media attachments from the post.
@@ -619,11 +961,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check if there are any videos or GIFs in the attachments
         const hasVideosOrGifs = toDisplay.some(att => att.type === 'video' || att.type === 'gifv');
 
-        // Only apply 3/2 aspect ratio for image-only layouts
-        if (toDisplay.length >= 2 && !hasVideosOrGifs) {
-            container.style.aspectRatio = '3 / 2';
+        // Compute grid style (avoid 3/2 aspect ratio for single-image posts)
+        const gridStyle = computeMediaGridStyle({ count: toDisplay.length, hasVideosOrGifs });
+        container.style.gridTemplateColumns = gridStyle.columns;
+        if (gridStyle.aspectRatio) {
+            container.style.aspectRatio = gridStyle.aspectRatio;
+        } else {
+            container.style.removeProperty('aspect-ratio');
         }
-        container.style.gridTemplateColumns = toDisplay.length > 1 ? '1fr 1fr' : '1fr';
 
         toDisplay.forEach((att, index) => {
             // For videos and GIFs, use preview URL; for images, use the main URL
@@ -648,33 +993,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const wrapper = document.createElement('div');
             wrapper.className = 'overflow-hidden relative';
+            wrapper.dataset.attachmentIndex = String(index);
+            wrapper.dataset.mediaType = att.type;
 
-            // Special handling for videos without preview URL
-            if ((att.type === 'video' || att.type === 'gifv') && !previewUrl) {
-                
-
-                // Create a visually appealing placeholder for videos
-                // Extract a simple identifier from the URL for display
-                const urlParts = url.split('/');
-                const filename = urlParts[urlParts.length - 1].split('.')[0];
-                const shortId = filename.substring(0, 8) + '...';
-
-                wrapper.innerHTML = `
-                    <div class="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center text-white p-4">
-                        <svg class="w-20 h-20 mb-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
-                        </svg>
-                        <div class="text-base font-medium mb-1">${att.type === 'gifv' ? 'GIF Video' : 'Video Content'}</div>
-                        <div class="text-xs text-gray-400 font-mono">${shortId}</div>
-                    </div>
-                `;
+            // Client-side thumbnail generation for direct video files without preview URL
+            if ((att.type === 'video' || att.type === 'gifv') && !previewUrl && url) {
+                // Prefer server-side thumbnail to avoid CORS when fetching cross-origin videos.
+                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\\'></path></svg></div>'">`;
+            }
+            // Client-side thumbnail generation for videos marked with __needsClientThumbnail flag
+            else if ((att.type === 'video' || att.type === 'gifv') && (att as any).__needsClientThumbnail && url) {
+                // Prefer server-side thumbnail to avoid CORS when fetching cross-origin videos.
+                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\\'></path></svg></div>'">`;
             }
             else if (dataUrl && dataUrl !== 'failed') {
                 // Image is loaded, display it
                 wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${dataUrl}">`;
             } else if (dataUrl === 'failed') {
                 // If image loading failed, try to use the original URL as fallback
-                wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${displayUrl}" onerror="this.parentElement.innerHTML = '<div class=\"w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\"><svg class=\"w-8 h-8 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg></div>'">`;
+                wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${displayUrl}" onerror="this.parentElement.innerHTML = '<div class=\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\'><svg class=\'w-8 h-8 text-gray-400\' fill=\'none\' stroke=\'currentColor\' viewBox=\'0 0 24 24\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\'></path></svg></div>'">`;
             } else {
                 // Image is still loading, show shimmer animation
                 wrapper.innerHTML = `<div class="w-full h-full shimmer"></div>`;
@@ -832,9 +1171,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     function setGenerateButtonState(isLoading: boolean) { if(generateBtn) { generateBtn.disabled = isLoading; generateBtn.textContent = isLoading ? 'Fetching...' : 'Generate Preview'; } }
+    let errorHideTimeout: ReturnType<typeof setTimeout> | null = null;
+
     function showError(message: string, detail?: string) {
         const fullMessage = detail ? `${message}\n${detail}` : message;
-        if(errorMessage) errorMessage.textContent = fullMessage;
+
+        // Clear any existing timeout
+        if (errorHideTimeout) {
+            clearTimeout(errorHideTimeout);
+            errorHideTimeout = null;
+        }
+
+        if(errorMessage) {
+            errorMessage.textContent = fullMessage;
+            // Show the error message with transition
+            errorMessage.classList.remove('opacity-0', 'max-h-0');
+            errorMessage.classList.add('opacity-100', 'max-h-32');
+        }
+
         if(previewArea) {
             previewArea.classList.add('hidden');
             previewArea.classList.remove('flex', 'flex-col');
@@ -842,6 +1196,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if(downloadBtn) downloadBtn.disabled = true;
         if(copyBtn) copyBtn.disabled = true;
         setPreviewState('error');
+
+        // Auto-hide after 5 seconds
+        errorHideTimeout = setTimeout(() => {
+            hideError();
+        }, 5000);
+    }
+
+    function hideError() {
+        if(errorMessage) {
+            errorMessage.classList.remove('opacity-100', 'max-h-32');
+            errorMessage.classList.add('opacity-0', 'max-h-0');
+            // Clear text after transition completes
+            setTimeout(() => {
+                if(errorMessage.classList.contains('opacity-0')) {
+                    errorMessage.textContent = '';
+                }
+            }, 500);
+        }
     }
 
     function toggleClearButtonVisibility() {

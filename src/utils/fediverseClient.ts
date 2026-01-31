@@ -1,4 +1,5 @@
 import { parseFediverseUrl, convertMastodonToUniversal, convertActivityPubToUniversal } from './activitypubParser';
+import { extractHashtagNames } from './netHelpers';
 import type { FediversePost, FediverseAccount } from '../types/activitypub';
 import { SUPPORTED_PLATFORMS, PlatformConfig } from '../types/activitypub';
 import { LRUCache } from './apiCache';
@@ -1121,29 +1122,8 @@ export class FediverseClient {
                       activityPubData.attachment = [...(activityPubData.attachment || []), ...videos];
                     }
 
-                    // Enhance content with extracted information
-                    if (extractedLinks.length > 0 || hashtags.length > 0) {
-                      let enhancedContent = activityPubData.content || '';
-
-                      // Add links to content if not already present
-                      extractedLinks.forEach(link => {
-                        const linkPattern = new RegExp(link.href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                        if (!linkPattern.test(enhancedContent)) {
-                          // Add the link if it's not already in the content
-                          enhancedContent += ` <a href="${link.href}">${link.text}</a>`;
-                        }
-                      });
-
-                      // Add hashtags to content if not already present
-                      hashtags.forEach(tag => {
-                        const tagPattern = new RegExp(tag.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                        if (!tagPattern.test(enhancedContent)) {
-                          enhancedContent += ` ${tag.name}`;
-                        }
-                      });
-
-                      activityPubData.content = enhancedContent;
-                    }
+                    // IMPORTANT: Do not inject extracted links/hashtags back into content.
+                    // Ech0 extension fields are separate from content; merging causes duplicate rendering.
 
                     
                   }
@@ -1171,6 +1151,159 @@ export class FediverseClient {
           errorCode: ErrorCode.NOT_FOUND,
           suggestion: 'Please verify:\n1. The URL points to a specific post (not the main page)\n2. The Ech0 instance has federation enabled\n3. The post is public and accessible\n4. The instance URL is correct (e.g., https://memo.vaaat.com for a working Ech0 instance)',
         };
+      }
+
+      // Ech0-specific REST API provides richer data than ActivityPub (extension links, tags, images, etc.).
+      // Prefer it to avoid missing embedded links/tags/media in generated images.
+      try {
+        const ech0Api = await this.fetchEch0ApiEcho(parsed.domain, parsed.id);
+        if (ech0Api) {
+          const markdown = typeof ech0Api.content === 'string' ? ech0Api.content : '';
+          const extensionTypeRaw = typeof ech0Api.extension_type === 'string' ? ech0Api.extension_type.trim() : '';
+          const extensionType = extensionTypeRaw && /^(MUSIC|VIDEO|WEBSITE|GITHUBPROJ)$/i.test(extensionTypeRaw)
+            ? extensionTypeRaw.toUpperCase()
+            : '';
+          const extensionUrl = this.parseEch0ExtensionToUrl(ech0Api.extension, extensionType);
+
+          // Prefer Ech0 API timestamp if present.
+          if (typeof ech0Api.created_at === 'string' && ech0Api.created_at) {
+            activityPubData.published = ech0Api.created_at;
+          }
+
+          // Use Markdown source from Ech0 API so the UI can render it consistently.
+          // IMPORTANT: Ech0 Extension (WEBSITE/MUSIC/VIDEO/...) is separate and must not be injected into content.
+          if (markdown && markdown.trim()) {
+            activityPubData.source = { content: markdown, mediaType: 'text/markdown' };
+            activityPubData.content = markdown;
+          }
+
+          // Map Ech0 tags -> ActivityPub tag array.
+          if (Array.isArray(ech0Api.tags) && ech0Api.tags.length > 0) {
+            const apiTags = ech0Api.tags
+              .map((t: any) => (typeof t?.name === 'string' ? t.name.trim() : ''))
+              .filter(Boolean);
+            if (apiTags.length > 0) {
+              activityPubData.tag = [
+                ...(activityPubData.tag || []),
+                ...apiTags.map((name: string) => ({
+                  type: 'Hashtag',
+                  name: name.startsWith('#') ? name : `#${name}`,
+                  href: `https://${parsed.domain}/discover/tags/${encodeURIComponent(name.replace(/^#/, ''))}`,
+                })),
+              ];
+            }
+          }
+
+          // Map Ech0 images -> ActivityPub attachments so our renderer shows them.
+          if (Array.isArray(ech0Api.images) && ech0Api.images.length > 0) {
+            const images = ech0Api.images
+              .map((img: any) => (typeof img?.image_url === 'string' ? img.image_url : ''))
+              .filter(Boolean)
+              // Ech0 images may include data:SVG placeholders in video posts; skip those as real media.
+              .filter((u: string) => !String(u).trim().toLowerCase().startsWith('data:'))
+              .map((u: string) => this.makeAbsoluteUrl(parsed.domain, u));
+
+            if (images.length > 0) {
+              const existing = new Set<string>(
+                (activityPubData.attachment || [])
+                  .map((att: any) => (typeof att?.url === 'string' ? this.normalizeUrlForDedupe(att.url) : ''))
+                  .filter(Boolean),
+              );
+
+              const deduped: string[] = [];
+              for (const url of images) {
+                const key = this.normalizeUrlForDedupe(url);
+                if (existing.has(key)) continue;
+                if (deduped.some(u => this.normalizeUrlForDedupe(u) === key)) continue;
+                deduped.push(url);
+              }
+
+              activityPubData.attachment = [
+                ...(activityPubData.attachment || []),
+                ...deduped.map((url: string) => ({
+                  type: 'Image',
+                  mediaType: url.toLowerCase().endsWith('.gif') ? 'image/gif' : 'image/*',
+                  url,
+                  name: 'Image',
+                })),
+              ];
+
+              // NOTE: Ech0 extension is separate; even video URLs should not become attachments here,
+              // or the extension block would render twice. Thumbnails are handled on the client.
+            }
+          }
+
+          // Map Ech0 media (video/audio) -> ActivityPub attachments.
+          if (Array.isArray(ech0Api.media) && ech0Api.media.length > 0) {
+            const existing = new Set<string>(
+              (activityPubData.attachment || [])
+                .map((att: any) => (typeof att?.url === 'string' ? this.normalizeUrlForDedupe(att.url) : ''))
+                .filter(Boolean),
+            );
+
+            // Ech0 Live Photo is usually an image + linked video (via live_video_id).
+            // Treat as one media item to avoid an extra video in generated images.
+            const liveVideoIds = new Set<number>(
+              ech0Api.media
+                .map((m: any) => (typeof m?.live_video_id === 'number' ? m.live_video_id : null))
+                .filter((v: any) => typeof v === 'number') as number[],
+            );
+            const liveVideoUrls = new Set<string>(
+              ech0Api.media
+                .filter((m: any) => typeof m?.id === 'number' && liveVideoIds.has(m.id))
+                .map((m: any) => (typeof m?.media_url === 'string' ? this.makeAbsoluteUrl(parsed.domain, m.media_url) : ''))
+                .filter(Boolean)
+                .map((u: string) => this.normalizeUrlForDedupe(u)),
+            );
+
+            // Some instances may already include the live video in ActivityPub attachments.
+            // Remove it here so it never reaches universalData.attachments.
+            if (liveVideoUrls.size > 0 && Array.isArray(activityPubData.attachment)) {
+              activityPubData.attachment = activityPubData.attachment.filter((att: any) => {
+                const t = typeof att?.type === 'string' ? att.type : '';
+                const url = typeof att?.url === 'string' ? att.url : '';
+                if (!t || !url) return true;
+                if (t.toLowerCase() !== 'video') return true;
+                return !liveVideoUrls.has(this.normalizeUrlForDedupe(url));
+              });
+            }
+
+            const videos = ech0Api.media
+              .map((m: any) => ({
+                type: typeof m?.media_type === 'string' ? m.media_type.toLowerCase() : '',
+                url: typeof m?.media_url === 'string' ? this.makeAbsoluteUrl(parsed.domain, m.media_url) : '',
+                id: typeof m?.id === 'number' ? m.id : null,
+              }))
+              .filter((m: {type: string; url: string; id: number | null}) => m.type === 'video' && m.url && !/^data:/i.test(m.url))
+              .filter((m: {type: string; url: string; id: number | null}) => !(typeof m.id === 'number' && liveVideoIds.has(m.id)));
+
+            if (videos.length > 0) {
+              const toAdd = videos
+                .map((v: {type: string; url: string; id: number | null}) => v.url)
+                .filter((u: string) => !existing.has(this.normalizeUrlForDedupe(u)));
+
+              if (toAdd.length > 0) {
+                activityPubData.attachment = [
+                  ...(activityPubData.attachment || []),
+                  ...toAdd.map((url: string) => ({
+                    type: 'Video',
+                    mediaType: 'video/*',
+                    url,
+                    name: 'Video',
+                  })),
+                ];
+              }
+            }
+          }
+
+          // Preserve Ech0 extension as structured data so the UI can render it in a dedicated section.
+          // We'll attach it to the universal post later (after conversion), but keep data available here.
+          if (extensionType && extensionUrl) {
+            (activityPubData as any).__ech0Extension = { type: extensionType, url: extensionUrl };
+          }
+        }
+      } catch {
+        // Best-effort: fall back to ActivityPub-only parsing if API is unavailable.
       }
 
       // Enhanced content extraction for Ech0 from both HTML content and Markdown source
@@ -1226,31 +1359,9 @@ export class FediverseClient {
         activityPubData.attachment = [...(activityPubData.attachment || []), ...videos];
       }
 
-      // Add extracted links and hashtags as plain text to content
-      // Links should be displayed as plain text in generated images
-      if (extractedLinks.length > 0 || hashtags.length > 0) {
-        let enhancedContent = activityPubData.content || '';
-
-        // Add links as plain text (just the URL)
-        extractedLinks.forEach((link) => {
-          const linkPattern = new RegExp(link.href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-          if (!linkPattern.test(enhancedContent)) {
-            // Add as plain text URL, not clickable link
-            enhancedContent += `\n${link.href}`;
-          }
-        });
-
-        // Add hashtags to content if not already present
-        hashtags.forEach(tag => {
-          const tagPattern = new RegExp(tag.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-          if (!tagPattern.test(enhancedContent)) {
-            enhancedContent += ` ${tag.name}`;
-          }
-        });
-
-        activityPubData.content = enhancedContent;
-        
-      }
+      // NOTE: We intentionally avoid appending extracted links/hashtags into content.
+      // Ech0's /api/echo/<id> provides canonical extension links + tags; mutating content here risks URL truncation
+      // and makes Markdown rendering inconsistent.
 
       // Special handling for Ech0: Add GitHub project link if "Ech0" is mentioned in the content
       // Add as plain text, not clickable link
@@ -1278,6 +1389,12 @@ export class FediverseClient {
       const universalData = await convertActivityPubToUniversal(activityPubData, parsed.domain);
       universalData.platform = 'ech0';
 
+      // Attach structured extension extracted from Ech0 REST API (if present).
+      const ext = (activityPubData as any).__ech0Extension;
+      if (ext && typeof ext === 'object' && typeof ext.type === 'string' && typeof ext.url === 'string') {
+        (universalData as any).extension = { type: ext.type, url: ext.url };
+      }
+
       // If attributedTo is a string, try to resolve the account to get full details including avatar
       if (typeof activityPubData.attributedTo === 'string') {
         const acctUrl = activityPubData.attributedTo;
@@ -1303,6 +1420,79 @@ export class FediverseClient {
     } catch (error) {
       console.error('Ech0 fetch failed:', error);
       return await this.fetchActivityPubObject(parsed.domain, parsed.id);
+    }
+  }
+
+  private static makeAbsoluteUrl(domain: string, url: string): string {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('//')) return `https:${url}`;
+    if (url.startsWith('/')) return `https://${domain}${url}`;
+    return `https://${domain}/${url}`;
+  }
+
+  private static parseEch0ExtensionToUrl(extension: any, extensionType?: string): string | null {
+    if (!extension) return null;
+    if (typeof extension === 'string') {
+      const trimmed = extension.trim();
+      if (!trimmed) return null;
+      // Some instances store WEBSITE extension as a JSON string.
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const obj = JSON.parse(trimmed);
+          const site = typeof obj?.site === 'string' ? obj.site : (typeof obj?.url === 'string' ? obj.url : '');
+          return site?.trim() || null;
+        } catch {
+          return null;
+        }
+      }
+      // For VIDEO type, convert BV/YouTube ID to full URL
+      if (extensionType?.toUpperCase() === 'VIDEO') {
+        // Bilibili BV format
+        if (/^BV[a-zA-Z0-9]{10}$/.test(trimmed)) {
+          return `https://www.bilibili.com/video/${trimmed}`;
+        }
+        // YouTube ID format (11 characters)
+        if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+          return `https://www.youtube.com/watch?v=${trimmed}`;
+        }
+      }
+      return trimmed;
+    }
+    if (typeof extension === 'object') {
+      const site = typeof (extension as any).site === 'string' ? (extension as any).site : (typeof (extension as any).url === 'string' ? (extension as any).url : '');
+      return site?.trim() || null;
+    }
+    return null;
+  }
+
+  private static async fetchEch0ApiEcho(domain: string, id: string): Promise<any | null> {
+    // /api/echo/<id> appears to be the canonical public API for Ech0 posts (numeric IDs).
+    const numericId = String(id || '').match(/^\d+$/) ? String(id) : null;
+    if (!numericId) return null;
+
+    const url = `https://${domain}/api/echo/${numericId}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== 'object') return null;
+    if (data.code !== 1 || !data.data) return null;
+    return data.data;
+  }
+
+  private static normalizeUrlForDedupe(rawUrl: string): string {
+    const raw = String(rawUrl || '').trim();
+    if (!raw) return '';
+    try {
+      const u = new URL(raw);
+      u.hash = '';
+      const dropParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'spm', 'from'];
+      dropParams.forEach(p => u.searchParams.delete(p));
+      const s = u.toString();
+      return s.endsWith('/') ? s.slice(0, -1) : s;
+    } catch {
+      return raw;
     }
   }
 
@@ -1498,12 +1688,9 @@ export class FediverseClient {
     const links: { href: string; text: string }[] = [];
     const videos: any[] = [];
 
-    // Extract hashtags from HTML - more specific patterns
-    // Pattern 1: Find standalone hashtags like "#tag"
-    const hashtagPattern1 = /#([^\s#<]+)/g;
-    let match1;
-    while ((match1 = hashtagPattern1.exec(htmlContent)) !== null) {
-      const tag = match1[1];
+    // Extract hashtags from HTML (strip tags to avoid matching color codes in attributes)
+    const htmlTags = extractHashtagNames(htmlContent);
+    htmlTags.forEach((tag: string) => {
       if (tag && tag.length > 0 && !hashtags.find(h => h.name === `#${tag}`)) {
         hashtags.push({
           type: 'Hashtag',
@@ -1511,7 +1698,7 @@ export class FediverseClient {
           href: `https://${domain}/discover/tags/${tag}`,
         });
       }
-    }
+    });
 
     // Pattern 2: Look for hashtags in specific HTML structures
     const tagElements = htmlContent.match(/<[^>]*class="[^"]*tag[^"]*"[^>]*>([^<]+)<\/[^>]*>/gi) || [];
@@ -1572,11 +1759,9 @@ export class FediverseClient {
 
     
 
-    // Extract hashtags from Markdown
-    const hashtagPattern = /#([^\s#]+)/g;
-    let hashtagMatch;
-    while ((hashtagMatch = hashtagPattern.exec(markdownContent)) !== null) {
-      const tag = hashtagMatch[1];
+    // Extract hashtags from Markdown (strip tags to avoid matching color codes in attributes)
+    const markdownTags = extractHashtagNames(markdownContent);
+    markdownTags.forEach((tag: string) => {
       if (tag && tag.length > 0 && !hashtags.find(h => h.name === `#${tag}`)) {
         hashtags.push({
           type: 'Hashtag',
@@ -1584,7 +1769,7 @@ export class FediverseClient {
           href: `https://${domain}/discover/tags/${tag}`,
         });
       }
-    }
+    });
 
     // Extract links from Markdown - multiple patterns
     // Pattern 1: Standard Markdown links [text](url)

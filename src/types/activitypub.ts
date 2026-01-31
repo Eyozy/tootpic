@@ -86,6 +86,18 @@ export interface FediversePoll {
   own_votes?: number[];
 }
 
+export interface FediverseLinkCard {
+  kind: 'bilibili';
+  url: string; // canonical URL
+  title?: string;
+  thumbnailUrl?: string; // remote image URL (will be preloaded via stream-images)
+}
+
+export interface FediverseExtension {
+  type: 'MUSIC' | 'VIDEO' | 'WEBSITE' | 'GITHUBPROJ';
+  url: string;
+}
+
 export interface FediversePost {
   id: string;
   content: string;
@@ -104,6 +116,8 @@ export interface FediversePost {
   language?: string;
   tags: FediverseTag[];
   poll?: FediversePoll;
+  linkCards?: FediverseLinkCard[];
+  extension?: FediverseExtension;
 }
 
 export interface FediverseAccount {
