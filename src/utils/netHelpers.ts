@@ -108,6 +108,47 @@ export function isSafeRemoteHttpUrl(rawUrl: string): boolean {
   }
 }
 
+const PRODUCTION_ORIGINS = ['https://tootpic.vercel.app'];
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+function parseOrigin(rawOrigin: string): URL | null {
+  try {
+    return new URL(rawOrigin);
+  } catch {
+    return null;
+  }
+}
+
+export function isAllowedRequestOrigin(rawOrigin: string | null, requestUrl: string): boolean {
+  if (!rawOrigin) return false;
+  if (PRODUCTION_ORIGINS.includes(rawOrigin)) return true;
+
+  const originUrl = parseOrigin(rawOrigin);
+  if (!originUrl) return false;
+  if (!LOCAL_HOSTS.has(originUrl.hostname)) return false;
+
+  const requestHost = new URL(requestUrl);
+  if (!LOCAL_HOSTS.has(requestHost.hostname)) return false;
+
+  return originUrl.port === requestHost.port;
+}
+
+export function buildCorsHeaders(request: Request, methods: string): Record<string, string> {
+  const origin = request.headers.get('origin');
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': methods,
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+
+  if (isAllowedRequestOrigin(origin, request.url)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+
+  return headers;
+}
+
 export function parseEncodedUrlList(imageUrlsParam: string): string[] {
   if (!imageUrlsParam) return [];
 

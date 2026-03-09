@@ -76,6 +76,182 @@ document.addEventListener('DOMContentLoaded', () => {
     let failedImageUrls = new Set<string>();
     let isRendering = false;
     let pendingRender = false;
+    const clientVideoThumbnailCache = new Map<string, string>();
+
+    function buildVideoProxyUrl(origin: string, videoUrl: string): string {
+        return `${origin}/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
+    }
+
+    function buildImageProxyUrl(origin: string, imageUrl: string): string {
+        return `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    }
+
+    function buildImageProbeUrl(origin: string, imageUrl: string): string {
+        return `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}&probe=1`;
+    }
+
+    async function probeVideoPreviewImage(imageUrl: string, timeoutMs: number = 900): Promise<boolean> {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(imageUrl, {
+                method: 'GET',
+                signal: controller.signal,
+                cache: 'no-store',
+            });
+            return response.headers.get('X-Image-Available') === '1';
+        } catch {
+            return false;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function captureClientVideoThumbnail(videoUrl: string, seekSeconds: number = 0.8, timeoutMs: number = 2500): Promise<string | null> {
+        const cachedThumbnail = clientVideoThumbnailCache.get(videoUrl);
+        if (cachedThumbnail) return cachedThumbnail;
+
+        return new Promise(resolve => {
+            const video = document.createElement('video');
+            let settled = false;
+            let targetTime = seekSeconds;
+            let startedAt = 0;
+
+            const cleanup = () => {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+                video.remove();
+            };
+
+            const finish = (dataUrl: string | null) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                cleanup();
+
+                if (dataUrl) clientVideoThumbnailCache.set(videoUrl, dataUrl);
+                resolve(dataUrl);
+            };
+
+            const captureFrame = () => {
+                try {
+                    const width = video.videoWidth || 0;
+                    const height = video.videoHeight || 0;
+                    if (!width || !height) return finish(null);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const context = canvas.getContext('2d');
+                    if (!context) return finish(null);
+
+                    context.drawImage(video, 0, 0, width, height);
+                    finish(canvas.toDataURL('image/jpeg', 0.92));
+                } catch {
+                    finish(null);
+                }
+            };
+
+            const pollFrame = () => {
+                if (settled) return;
+
+                const hasFrame = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+                const reachedTarget = Math.abs(video.currentTime - targetTime) <= 0.15 || video.currentTime > targetTime;
+                if (hasFrame && reachedTarget && video.videoWidth > 0 && video.videoHeight > 0) {
+                    captureFrame();
+                    return;
+                }
+
+                if (performance.now() - startedAt >= timeoutMs) {
+                    finish(null);
+                    return;
+                }
+
+                window.requestAnimationFrame(pollFrame);
+            };
+
+            const timer = window.setTimeout(() => finish(null), timeoutMs + 50);
+
+            video.crossOrigin = 'anonymous';
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            video.style.position = 'fixed';
+            video.style.left = '-9999px';
+            video.style.top = '0';
+            video.style.width = '1px';
+            video.style.height = '1px';
+            video.style.opacity = '0';
+            video.style.pointerEvents = 'none';
+            video.onerror = () => finish(null);
+            video.onloadeddata = () => {
+                const duration = Number.isFinite(video.duration) ? video.duration : 0;
+                targetTime = duration > 0
+                    ? Math.min(Math.max(seekSeconds, 0.1), Math.max(duration - 0.1, 0.1))
+                    : seekSeconds;
+                startedAt = performance.now();
+
+                if (duration > 0 && Math.abs(video.currentTime - targetTime) > 0.05) {
+                    try {
+                        video.currentTime = targetTime;
+                    } catch {
+                    }
+                }
+
+                pollFrame();
+            };
+
+            document.body.appendChild(video);
+            video.src = videoUrl;
+            video.load();
+        });
+    }
+
+    async function prefetchClientVideoThumbnails(post: FediversePost | null, origin: string): Promise<void> {
+        if (!post) return;
+
+        const candidates = post.attachments.filter(att =>
+            (att.type === 'video' || att.type === 'gifv')
+            && (att as any).__needsClientThumbnail
+            && typeof att.url === 'string'
+            && att.url
+        );
+
+        if (candidates.length === 0) return;
+
+        await Promise.all(candidates.map(async att => {
+            const videoUrl = att.url as string;
+            const captureUrl = buildVideoProxyUrl(origin, videoUrl);
+            const candidatePreviewUrl = typeof (att as any).__candidatePreviewUrl === 'string' && (att as any).__candidatePreviewUrl
+                ? (att as any).__candidatePreviewUrl
+                : typeof (att as any).__fallbackPreviewUrl === 'string' && (att as any).__fallbackPreviewUrl
+                    ? (att as any).__fallbackPreviewUrl
+                    : (typeof att.previewUrl === 'string' ? att.previewUrl : '');
+
+            if (candidatePreviewUrl) {
+                const proxiedPreviewUrl = buildImageProxyUrl(origin, candidatePreviewUrl);
+                const previewReady = await probeVideoPreviewImage(buildImageProbeUrl(origin, candidatePreviewUrl));
+                if (previewReady) {
+                    att.previewUrl = proxiedPreviewUrl;
+                    (att as any).__directPreviewReady = true;
+                    return;
+                }
+            }
+
+            const dataUrl = await captureClientVideoThumbnail(captureUrl, 0.8, 6000);
+            if (dataUrl) {
+                imageMap[videoUrl] = dataUrl;
+                (att as any).__clientThumbnailReady = true;
+                return;
+            }
+
+            att.previewUrl = candidatePreviewUrl
+                ? buildImageProxyUrl(origin, candidatePreviewUrl)
+                : `${origin}/api/video-thumbnail?url=${encodeURIComponent(videoUrl)}&t=0.8`;
+        }));
+    }
 
     // Content warning animation state management
     let contentWarningAnimationState = {
@@ -214,11 +390,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // If we already have image URLs from the server, use them
             let imageUrls: string[] = [];
             const origin = window.location.origin;
+            await prefetchClientVideoThumbnails(postData, origin);
             const collectVideoThumbUrls = (post: FediversePost | null): string[] => {
                 if (!post) return [];
                 return post.attachments.flatMap(att => {
                     if (att.type !== 'video' && att.type !== 'gifv') return [];
+                    if ((att as any).__clientThumbnailReady) return [];
+                    if ((att as any).__directPreviewReady) return [];
                     if (att.previewUrl) return [att.previewUrl];
+                    if ((att as any).__needsClientThumbnail) return [];
                     if (typeof att.url === 'string' && att.url) {
                         return [`${origin}/api/video-thumbnail?url=${encodeURIComponent(att.url)}&t=0.8`];
                     }
@@ -242,8 +422,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...postData.attachments.flatMap(att => {
                         if (att.type === 'image') return [att.url];
                         if (att.type === 'video' || att.type === 'gifv') {
+                            if ((att as any).__clientThumbnailReady) return [];
+                            if ((att as any).__directPreviewReady) return [];
                             if (att.previewUrl) return [att.previewUrl];
-                            // No preview yet: use server thumbnail endpoint to avoid CORS video fetch
+                            if ((att as any).__needsClientThumbnail) return [];
                             if (typeof att.url === 'string' && att.url) {
                                 return [`${origin}/api/video-thumbnail?url=${encodeURIComponent(att.url)}&t=0.8`];
                             }
@@ -996,21 +1178,19 @@ document.addEventListener('DOMContentLoaded', () => {
             wrapper.dataset.attachmentIndex = String(index);
             wrapper.dataset.mediaType = att.type;
 
-            // Client-side thumbnail generation for direct video files without preview URL
-            if ((att.type === 'video' || att.type === 'gifv') && !previewUrl && url) {
-                // Prefer server-side thumbnail to avoid CORS when fetching cross-origin videos.
-                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
-                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\\'></path></svg></div>'">`;
-            }
-            // Client-side thumbnail generation for videos marked with __needsClientThumbnail flag
-            else if ((att.type === 'video' || att.type === 'gifv') && (att as any).__needsClientThumbnail && url) {
-                // Prefer server-side thumbnail to avoid CORS when fetching cross-origin videos.
-                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
-                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\\'></path></svg></div>'">`;
-            }
-            else if (dataUrl && dataUrl !== 'failed') {
-                // Image is loaded, display it
+            if (dataUrl && dataUrl !== 'failed') {
                 wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${dataUrl}">`;
+            }
+            else if ((att.type === 'video' || att.type === 'gifv') && previewUrl) {
+                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${previewUrl}">`;
+            }
+            else if ((att.type === 'video' || att.type === 'gifv') && !previewUrl && url) {
+                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\'><svg class=\'w-8 h-8 text-gray-400\' fill=\'none\' stroke=\'currentColor\' viewBox=\'0 0 24 24\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\'></path></svg></div>'">`;
+            }
+            else if ((att.type === 'video' || att.type === 'gifv') && (att as any).__needsClientThumbnail && url) {
+                const serverThumb = `/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+                wrapper.innerHTML = `<img alt="${att.description || `Video ${index + 1}`}" class="w-full h-full object-cover" src="${serverThumb}" onerror="this.parentElement.innerHTML = '<div class=\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\'><svg class=\'w-8 h-8 text-gray-400\' fill=\'none\' stroke=\'currentColor\' viewBox=\'0 0 24 24\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\'></path></svg></div>'">`;
             } else if (dataUrl === 'failed') {
                 // If image loading failed, try to use the original URL as fallback
                 wrapper.innerHTML = `<img alt="${att.description || `Attachment ${index + 1}`}" class="w-full h-full object-cover" src="${displayUrl}" onerror="this.parentElement.innerHTML = '<div class=\'w-full h-full bg-gray-200 flex items-center justify-center text-gray-500\'><svg class=\'w-8 h-8 text-gray-400\' fill=\'none\' stroke=\'currentColor\' viewBox=\'0 0 24 24\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z\'></path></svg></div>'">`;

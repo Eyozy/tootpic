@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { parseEncodedUrlList } from '../../utils/netHelpers';
+import { buildCorsHeaders, parseEncodedUrlList } from '../../utils/netHelpers';
 
 // This must be set to false for GET requests with query params to work correctly in production.
 export const prerender = false;
@@ -89,24 +89,7 @@ async function imageToBase64(
  * API route that streams image data back to the client using Server-Sent Events.
  */
 export const GET: APIRoute = async ({ request }) => {
-  
-  const origin = request.headers.get('origin');
-  const corsHeaders: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin'
-  };
-
-  
-  const allowedOrigins = [
-    'https://tootpic.vercel.app',
-    'http://localhost:4321'
-  ];
-
-  if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  }
+  const corsHeaders = buildCorsHeaders(request, 'GET, OPTIONS');
 
   try {
     const searchParams = new URL(request.url).searchParams;
@@ -265,26 +248,8 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const OPTIONS: APIRoute = async ({ request }) => {
-  const origin = request.headers.get('origin');
-  const corsHeaders: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin'
-  };
-
-  
-  const allowedOrigins = [
-    'https://tootpic.vercel.app',
-    'http://localhost:4321'
-  ];
-
-  if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  }
-
   return new Response(null, {
     status: 200,
-    headers: corsHeaders
+    headers: buildCorsHeaders(request, 'GET, OPTIONS')
   });
 };

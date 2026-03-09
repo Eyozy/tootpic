@@ -912,21 +912,19 @@ export class FediverseClient {
   private static async fetchEch0Post(parsed: any): Promise<FetchPostResult> {
     
     try {
-      // Ech0 specific patterns - try the original page URL first to extract ActivityPub
-      const possibleUrls = [
-        // Direct object URL
-        parsed.id.startsWith('http') ? parsed.id : null,
-        // Original page URL for Ech0 echo posts
+      // Ech0 usually exposes the canonical ActivityPub object under /objects/<id>.
+      // Try high-confidence endpoints first and keep lower-confidence routes as fallback.
+      const primaryUrls = [
+        parsed.id.startsWith('http') ? parsed.id : `https://${parsed.domain}/objects/${parsed.id}`,
         `https://${parsed.domain}/echo/${parsed.id}`,
-        // Standard ActivityPub objects endpoint
-        `https://${parsed.domain}/objects/${parsed.id}`,
-        // Posts endpoint (common in Ech0)
-        `https://${parsed.domain}/posts/${parsed.id}`,
-        // Notes endpoint (alternative)
-        `https://${parsed.domain}/notes/${parsed.id}`,
-        // Generic status endpoint
-        `https://${parsed.domain}/statuses/${parsed.id}`,
       ].filter(Boolean);
+      const fallbackUrls = [
+        `https://${parsed.domain}/posts/${parsed.id}`,
+        `https://${parsed.domain}/notes/${parsed.id}`,
+        `https://${parsed.domain}/statuses/${parsed.id}`,
+      ];
+      const possibleUrls = Array.from(new Set([...primaryUrls, ...fallbackUrls]));
+      const ech0ApiPromise = this.fetchEch0ApiEcho(parsed.domain, parsed.id).catch(() => null);
 
       let activityPubData = null;
       let lastError = null;
@@ -1156,8 +1154,26 @@ export class FediverseClient {
       // Ech0-specific REST API provides richer data than ActivityPub (extension links, tags, images, etc.).
       // Prefer it to avoid missing embedded links/tags/media in generated images.
       try {
-        const ech0Api = await this.fetchEch0ApiEcho(parsed.domain, parsed.id);
+        const ech0Api = await ech0ApiPromise;
         if (ech0Api) {
+          const attachmentHasKind = (attachment: any, kind: 'image' | 'video'): boolean => {
+            const type = typeof attachment?.type === 'string' ? attachment.type.toLowerCase() : '';
+            if (type === kind) return true;
+
+            const mediaType = typeof attachment?.mediaType === 'string' ? attachment.mediaType.toLowerCase() : '';
+            if (mediaType.startsWith(`${kind}/`)) return true;
+
+            if (!Array.isArray(attachment?.url)) return false;
+
+            return attachment.url.some((item: any) => {
+              const itemMediaType = typeof item?.mediaType === 'string' ? item.mediaType.toLowerCase() : '';
+              return itemMediaType.startsWith(`${kind}/`);
+            });
+          };
+
+          const hasImageAttachments = () => (activityPubData.attachment || []).some((attachment: any) => attachmentHasKind(attachment, 'image'));
+          const hasVideoAttachments = () => (activityPubData.attachment || []).some((attachment: any) => attachmentHasKind(attachment, 'video'));
+
           const markdown = typeof ech0Api.content === 'string' ? ech0Api.content : '';
           const extensionTypeRaw = typeof ech0Api.extension_type === 'string' ? ech0Api.extension_type.trim() : '';
           const extensionType = extensionTypeRaw && /^(MUSIC|VIDEO|WEBSITE|GITHUBPROJ)$/i.test(extensionTypeRaw)
@@ -1195,7 +1211,7 @@ export class FediverseClient {
           }
 
           // Map Ech0 images -> ActivityPub attachments so our renderer shows them.
-          if (Array.isArray(ech0Api.images) && ech0Api.images.length > 0) {
+          if (!hasImageAttachments() && Array.isArray(ech0Api.images) && ech0Api.images.length > 0) {
             const images = ech0Api.images
               .map((img: any) => (typeof img?.image_url === 'string' ? img.image_url : ''))
               .filter(Boolean)
@@ -1235,12 +1251,6 @@ export class FediverseClient {
 
           // Map Ech0 media (video/audio) -> ActivityPub attachments.
           if (Array.isArray(ech0Api.media) && ech0Api.media.length > 0) {
-            const existing = new Set<string>(
-              (activityPubData.attachment || [])
-                .map((att: any) => (typeof att?.url === 'string' ? this.normalizeUrlForDedupe(att.url) : ''))
-                .filter(Boolean),
-            );
-
             // Ech0 Live Photo is usually an image + linked video (via live_video_id).
             // Treat as one media item to avoid an extra video in generated images.
             const liveVideoIds = new Set<number>(
@@ -1268,30 +1278,41 @@ export class FediverseClient {
               });
             }
 
-            const videos = ech0Api.media
-              .map((m: any) => ({
-                type: typeof m?.media_type === 'string' ? m.media_type.toLowerCase() : '',
-                url: typeof m?.media_url === 'string' ? this.makeAbsoluteUrl(parsed.domain, m.media_url) : '',
-                id: typeof m?.id === 'number' ? m.id : null,
-              }))
-              .filter((m: {type: string; url: string; id: number | null}) => m.type === 'video' && m.url && !/^data:/i.test(m.url))
-              .filter((m: {type: string; url: string; id: number | null}) => !(typeof m.id === 'number' && liveVideoIds.has(m.id)));
+            if (hasVideoAttachments()) {
+              // ActivityPub already supplied the video attachments we need.
+              // Keep Ech0 media as fallback-only to avoid duplicate media cards.
+            } else {
+              const existing = new Set<string>(
+                (activityPubData.attachment || [])
+                  .map((att: any) => (typeof att?.url === 'string' ? this.normalizeUrlForDedupe(att.url) : ''))
+                  .filter(Boolean),
+              );
 
-            if (videos.length > 0) {
-              const toAdd = videos
-                .map((v: {type: string; url: string; id: number | null}) => v.url)
-                .filter((u: string) => !existing.has(this.normalizeUrlForDedupe(u)));
+              const videos = ech0Api.media
+                .map((m: any) => ({
+                  type: typeof m?.media_type === 'string' ? m.media_type.toLowerCase() : '',
+                  url: typeof m?.media_url === 'string' ? this.makeAbsoluteUrl(parsed.domain, m.media_url) : '',
+                  id: typeof m?.id === 'number' ? m.id : null,
+                }))
+                .filter((m: {type: string; url: string; id: number | null}) => m.type === 'video' && m.url && !/^data:/i.test(m.url))
+                .filter((m: {type: string; url: string; id: number | null}) => !(typeof m.id === 'number' && liveVideoIds.has(m.id)));
 
-              if (toAdd.length > 0) {
-                activityPubData.attachment = [
-                  ...(activityPubData.attachment || []),
-                  ...toAdd.map((url: string) => ({
-                    type: 'Video',
-                    mediaType: 'video/*',
-                    url,
-                    name: 'Video',
-                  })),
-                ];
+              if (videos.length > 0) {
+                const toAdd = videos
+                  .map((v: {type: string; url: string; id: number | null}) => v.url)
+                  .filter((u: string) => !existing.has(this.normalizeUrlForDedupe(u)));
+
+                if (toAdd.length > 0) {
+                  activityPubData.attachment = [
+                    ...(activityPubData.attachment || []),
+                    ...toAdd.map((url: string) => ({
+                      type: 'Video',
+                      mediaType: 'video/*',
+                      url,
+                      name: 'Video',
+                    })),
+                  ];
+                }
               }
             }
           }

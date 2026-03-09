@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { FediverseClient } from '../../utils/fediverseClient';
-import { normalizeAndDedupeAttachments } from '../../utils/netHelpers';
+import { buildCorsHeaders, normalizeAndDedupeAttachments } from '../../utils/netHelpers';
 
 function extractBilibiliIds(text: string): Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> {
   const out: Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> = [];
@@ -189,22 +189,7 @@ function getClientIP(request: Request): string {
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const origin = request.headers.get('origin');
-  const corsHeaders: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin'
-  };
-
-  const allowedOrigins = [
-    'https://tootpic.vercel.app',
-    'http://localhost:4321'
-  ];
-
-  if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  }
+  const corsHeaders = buildCorsHeaders(request, 'POST, OPTIONS');
 
   try {
     const clientIp = getClientIP(request);
@@ -337,18 +322,20 @@ export const POST: APIRoute = async ({ request }) => {
       const preview = typeof att.previewUrl === 'string' ? att.previewUrl : '';
       const isEch0 = result.platform === 'ech0';
       const isDerivedThumb = preview.endsWith('_thumb.jpeg') || preview.endsWith('_thumb.jpg');
-      if (!preview || /^data:/i.test(preview) || (isEch0 && isDerivedThumb)) {
-        // Check if it's a direct video file (Ech0 self-hosted)
+      const shouldRegeneratePreview = !preview || /^data:/i.test(preview) || (isEch0 && isDerivedThumb);
+      if (shouldRegeneratePreview) {
         const isDirectVideo = /\.(mp4|webm|mov)$/i.test(url);
         if (isDirectVideo) {
-          // Mark for client-side thumbnail generation
+          if (preview) {
+            (att as any).__candidatePreviewUrl = preview;
+            (att as any).__fallbackPreviewUrl = preview;
+          }
+          att.previewUrl = '';
           (att as any).__needsClientThumbnail = true;
-          // Use a placeholder initially - client will generate real thumbnail
-          att.previewUrl = `${siteOrigin}/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
-        } else {
-          // For external videos (YouTube, Bilibili), use server-generated placeholder
-          att.previewUrl = `${siteOrigin}/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+          continue;
         }
+
+        att.previewUrl = `${siteOrigin}/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
       }
     }
 
@@ -510,25 +497,8 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 export const OPTIONS: APIRoute = async ({ request }) => {
-  const origin = request.headers.get('origin');
-  const corsHeaders: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin'
-  };
-
-  const allowedOrigins = [
-    'https://tootpic.vercel.app',
-    'http://localhost:4321'
-  ];
-
-  if (origin && allowedOrigins.includes(origin)) {
-    corsHeaders['Access-Control-Allow-Origin'] = origin;
-  }
-
   return new Response(null, {
     status: 200,
-    headers: corsHeaders
+    headers: buildCorsHeaders(request, 'POST, OPTIONS')
   });
 };

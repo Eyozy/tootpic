@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { bufferToBody, isSafeRemoteHttpUrl } from '../../utils/netHelpers';
+import { LRUCache } from '../../utils/apiCache';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -9,6 +10,7 @@ import * as os from 'os';
 export const prerender = false;
 
 const execAsync = promisify(exec);
+const thumbnailCache = new LRUCache<Buffer>(64, 60);
 
  
 
@@ -225,7 +227,7 @@ function videoPlaceholderSvg(platform?: string, videoUrl?: string): Response {
       </feMerge>
     </filter>
   </defs>
-  <rect width="640" height="360" rx="16" fill="url(#bg)"/>
+  <rect width="640" height="360" fill="url(#bg)"/>
   <circle cx="320" cy="140" r="60" fill="rgba(255,255,255,0.2)" filter="url(#glow)"/>
   <circle cx="320" cy="140" r="50" fill="rgba(255,255,255,0.95)"/>
   <path d="M305 125 L305 165 L345 145 Z" fill="${colors[0]}"/>
@@ -275,12 +277,25 @@ export const GET: APIRoute = async ({ request }) => {
     return videoPlaceholderSvg(undefined, rawUrl);
   }
 
+  const cacheKey = `${rawUrl}::${seekSeconds.toFixed(2)}`;
+  const cachedThumbnail = thumbnailCache.get(cacheKey);
+  if (cachedThumbnail) {
+    return new Response(bufferToBody(cachedThumbnail), {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
+
   // Try to get platform-specific thumbnail
   const videoInfo = extractVideoInfo(rawUrl);
 
   if (videoInfo?.thumbnailUrl) {
     const imageBuffer = await fetchImageAsBuffer(videoInfo.thumbnailUrl);
     if (imageBuffer) {
+      thumbnailCache.set(cacheKey, imageBuffer);
       return new Response(bufferToBody(imageBuffer), {
         status: 200,
         headers: {
@@ -295,6 +310,7 @@ export const GET: APIRoute = async ({ request }) => {
   if (videoInfo?.platform === 'direct') {
     const thumbnailBuffer = await generateVideoThumbnail(rawUrl, seekSeconds);
     if (thumbnailBuffer) {
+      thumbnailCache.set(cacheKey, thumbnailBuffer);
       return new Response(bufferToBody(thumbnailBuffer), {
         status: 200,
         headers: {
