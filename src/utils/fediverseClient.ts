@@ -439,6 +439,7 @@ export class FediverseClient {
             headers: {
               'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
             },
+            signal: AbortSignal.timeout(3000),
           });
 
           if (response.ok) {
@@ -464,7 +465,7 @@ export class FediverseClient {
           }
 
           // If ActivityPub headers fail, try to get the page and extract ActivityPub from it
-          response = await fetch(url);
+          response = await fetch(url, { signal: AbortSignal.timeout(3000) });
           if (response.ok) {
             const text = await response.text();
 
@@ -924,18 +925,19 @@ export class FediverseClient {
         `https://${parsed.domain}/statuses/${parsed.id}`,
       ];
       const possibleUrls = Array.from(new Set([...primaryUrls, ...fallbackUrls]));
-      const ech0ApiPromise = this.fetchEch0ApiEcho(parsed.domain, parsed.id).catch(() => null);
+      const ech0ApiPromise = Promise.race([
+        this.fetchEch0ApiEcho(parsed.domain, parsed.id),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Ech0 API timeout')), 3000))
+      ]).catch(() => null);
 
-      let activityPubData = null;
-      let lastError = null;
-
-      for (const url of possibleUrls) {
+      const tryUrl = async (url: string) => {
         try {
           // First try to get as ActivityPub JSON
           let response = await fetch(url, {
             headers: {
               'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
             },
+            signal: AbortSignal.timeout(3000),
           });
 
           if (response.ok) {
@@ -949,53 +951,46 @@ export class FediverseClient {
                   const data = JSON.parse(text);
                   if (data.type && (data.type === 'Note' || data.type === 'Create' || data.type === 'Image' || data.type === 'Video' ||
                       data.type === 'Article' || data.type === 'Page')) {
-                    activityPubData = data;
-                    
-                    break;
-                  } else {
-                    
-                    lastError = new Error(`Invalid ActivityPub object type: ${data.type}`);
+                    return data;
                   }
                 } catch (parseError) {
-                  
-                  lastError = parseError;
-                  continue;
+                  // Continue to HTML fallback
                 }
               }
             }
           }
 
           // If ActivityPub headers fail, try to get the page and extract ActivityPub from it
-          response = await fetch(url);
+          response = await fetch(url, { signal: AbortSignal.timeout(3000) });
           if (response.ok) {
             const text = await response.text();
 
             // Look for ActivityPub data in the HTML
-            const activityJsonMatch = text.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/s);
+            const activityJsonMatch = text.match(/<script[^>]*type=[\"']application\/ld\+json[\"'][^>]*>(.*?)<\/script>/s);
             if (activityJsonMatch) {
               try {
                 const jsonData = JSON.parse(activityJsonMatch[1]);
                 if (jsonData.type === 'Note' || (jsonData['@graph'] && jsonData['@graph'].some((item: any) => item.type === 'Note'))) {
-                  activityPubData = jsonData['@graph'] ? jsonData['@graph'].find((item: any) => item.type === 'Note') : jsonData;
+                  let activityPubData = jsonData['@graph'] ? jsonData['@graph'].find((item: any) => item.type === 'Note') : jsonData;
 
                   // Extract avatar from HTML meta tags if not in ActivityPub data
                   if (!activityPubData.attributedTo?.icon?.url) {
                     // Try multiple patterns to find the user avatar
-                    const avatarMatch = text.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/);
-                    const userAvatarMatch = text.match(/<img[^>]*class=["'][^"']*avatar[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/);
-                    const profileImageMatch = text.match(/<meta[^>]*property=["']twitter:image["'][^>]*content=["']([^"']+)["'][^>]*>/);
+                    const avatarMatch = text.match(/<meta[^>]*property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)[\"'][^>]*>/);
+                    const userAvatarMatch = text.match(/<img[^>]*class=[\"'][^\"']*avatar[^\"']*[\"'][^>]*src=[\"']([^\"']+)[\"'][^>]*>/);
+                    const profileImageMatch = text.match(/<meta[^>]*property=[\"']twitter:image[\"'][^>]*content=[\"']([^\"']+)[\"'][^>]*>/);
 
                     // Try to find user profile image in various patterns
                     const userProfilePatterns = [
-                      /<img[^>]*class=["'][^"']*user[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/,
-                      /<img[^>]*class=["'][^"']*profile[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/,
-                      /<img[^>]*alt=["'][^"']*logo[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/,
-                      /<img[^>]*src=["']([^"']*\/avatars\/[^"']+)["'][^>]*>/,
+                      /<img[^>]*class=[\"'][^\"']*user[^\"']*[\"'][^>]*src=[\"']([^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*class=[\"'][^\"']*profile[^\"']*[\"'][^>]*src=[\"']([^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*alt=[\"'][^\"']*logo[^\"']*[\"'][^>]*src=[\"']([^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*src=[\"']([^\"']*\/avatars\/[^\"']+)[\"'][^>]*>/,
                       // Ech0 specific avatar patterns
-                      /<img[^>]*src=["']([^"']*\/storage\/[^"']+)["'][^>]*>/,
-                      /<img[^>]*src=["']([^"']*\/uploads\/[^"']+)["'][^>]*>/,
-                      /<img[^>]*src=["']([^"']*\/images\/[^"']+)["'][^>]*>/,
-                      /<img[^>]*src=["']([^"']*\/media\/[^"']+)["'][^>]*>/,
+                      /<img[^>]*src=[\"']([^\"']*\/storage\/[^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*src=[\"']([^\"']*\/uploads\/[^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*src=[\"']([^\"']*\/images\/[^\"']+)[\"'][^>]*>/,
+                      /<img[^>]*src=[\"']([^\"']*\/media\/[^\"']+)[\"'][^>]*>/,
                     ];
 
                     let profileAvatarMatch = null;
@@ -1024,7 +1019,6 @@ export class FediverseClient {
 
                       // Set avatar
                       activityPubData.attributedTo.icon = { url: absoluteAvatarUrl };
-                      
                     }
                   }
 
@@ -1049,7 +1043,7 @@ export class FediverseClient {
                     }
 
                     // Pattern 2: Look for hashtags in specific HTML structures
-                    const tagElements = text.match(/<[^>]*class="[^"]*tag[^"]*"[^>]*>([^<]+)<\/[^>]*>/gi) || [];
+                    const tagElements = text.match(/<[^>]*class=\"[^\"]*tag[^\"]*\"[^>]*>([^<]+)<\/[^>]*>/gi) || [];
                     for (const element of tagElements) {
                       const tagMatch = element.match(/#([^\s<>]+)/);
                       if (tagMatch) {
@@ -1065,7 +1059,7 @@ export class FediverseClient {
                     }
 
                     // Extract links from HTML content
-                    const linkPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]+)<\/a>/g;
+                    const linkPattern = /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([^<]+)<\/a>/g;
                     const extractedLinks = [];
                     let linkMatch;
                     while ((linkMatch = linkPattern.exec(text)) !== null) {
@@ -1077,7 +1071,7 @@ export class FediverseClient {
                     }
 
                     // Extract videos/iframes
-                    const iframePattern = /<iframe[^>]*src=["']([^"']+)["'][^>]*>/g;
+                    const iframePattern = /<iframe[^>]*src=[\"']([^\"']+)[\"'][^>]*>/g;
                     const videos = [];
                     let iframeMatch;
                     while ((iframeMatch = iframePattern.exec(text)) !== null) {
@@ -1122,25 +1116,33 @@ export class FediverseClient {
 
                     // IMPORTANT: Do not inject extracted links/hashtags back into content.
                     // Ech0 extension fields are separate from content; merging causes duplicate rendering.
-
-                    
                   }
 
-                  
-                  break;
+                  return activityPubData;
                 }
               } catch (extractError) {
-                
-                lastError = extractError;
+                // Continue
               }
             }
           }
         } catch (e) {
-          
-          lastError = e;
-          continue;
+          // Continue
+        }
+        return null;
+      };
+
+      // Try all URLs in parallel and take the first successful result
+      const urlPromises = possibleUrls.map(url => tryUrl(url));
+      const results = await Promise.allSettled(urlPromises);
+
+      let activityPubData = null;
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          activityPubData = result.value;
+          break;
         }
       }
+
 
       if (!activityPubData) {
         return {

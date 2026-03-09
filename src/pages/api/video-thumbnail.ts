@@ -124,8 +124,9 @@ async function runFfmpegThumbnail(videoBuffer: Buffer, seekSeconds: number): Pro
     // -vframes 1: extract only 1 frame
     // -q:v 2: quality (2 is good, 1 is best)
     // -y: overwrite output
+    const safeSeekSeconds = Math.max(0.1, Math.min(5, seekSeconds));
     await execAsync(
-      `ffmpeg -i "${tempVideoPath}" -ss ${seekSeconds.toFixed(2)} -vframes 1 -q:v 2 -y "${tempThumbPath}"`,
+      `ffmpeg -i "${tempVideoPath}" -ss ${safeSeekSeconds.toFixed(2)} -vframes 1 -q:v 2 -y "${tempThumbPath}"`,
       { timeout: 10000 }
     );
 
@@ -136,8 +137,6 @@ async function runFfmpegThumbnail(videoBuffer: Buffer, seekSeconds: number): Pro
     }
 
     return null;
-  } catch (error) {
-    throw error;
   } finally {
     // Clean up temp files
     try {
@@ -261,8 +260,7 @@ function parseSeekSeconds(raw: string | null): number {
   const fallback = 0.8;
   if (!raw) return fallback;
   const value = Number(raw);
-  if (!Number.isFinite(value)) return fallback;
-  // Clamp to a safe range; short videos still get a usable frame.
+  if (!Number.isFinite(value) || value !== value) return fallback;
   if (value < 0.1) return 0.1;
   if (value > 5) return 5;
   return value;

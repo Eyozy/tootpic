@@ -1,5 +1,5 @@
 const TAG_RE = /#([^\s#]+)/g;
-const INTERNAL_HOST_PATTERNS = [
+export const INTERNAL_HOST_PATTERNS = [
   /^localhost$/i,
   /^127\./,
   /^10\./,

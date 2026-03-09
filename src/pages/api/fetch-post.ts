@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { FediverseClient } from '../../utils/fediverseClient';
-import { buildCorsHeaders, normalizeAndDedupeAttachments } from '../../utils/netHelpers';
+import { buildCorsHeaders, normalizeAndDedupeAttachments, INTERNAL_HOST_PATTERNS } from '../../utils/netHelpers';
 
 function extractBilibiliIds(text: string): Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> {
   const out: Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> = [];
@@ -185,6 +185,33 @@ function getClientIP(request: Request): string {
   return request.headers.get('cf-connecting-ip') || 'unknown';
 }
 
+function processVideoThumbnail(att: any, platform: string, siteOrigin: string): void {
+  if (att?.type !== 'video') return;
+
+  const url = typeof att.url === 'string' ? att.url : '';
+  if (!url) return;
+
+  const preview = typeof att.previewUrl === 'string' ? att.previewUrl : '';
+  const isEch0 = platform === 'ech0';
+  const isDerivedThumb = preview.endsWith('_thumb.jpeg') || preview.endsWith('_thumb.jpg');
+  const shouldRegeneratePreview = !preview || /^data:/i.test(preview) || (isEch0 && isDerivedThumb);
+
+  if (!shouldRegeneratePreview) return;
+
+  const isDirectVideo = /\.(mp4|webm|mov)$/i.test(url);
+  if (isDirectVideo) {
+    if (preview) {
+      att.__candidatePreviewUrl = preview;
+      att.__fallbackPreviewUrl = preview;
+    }
+    att.previewUrl = '';
+    att.__needsClientThumbnail = true;
+    return;
+  }
+
+  att.previewUrl = `${siteOrigin}/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
+}
+
 // This must be set to false for POST requests to work correctly in production.
 export const prerender = false;
 
@@ -252,27 +279,15 @@ export const POST: APIRoute = async ({ request }) => {
 
       // Block internal network addresses
       const hostname = urlObj.hostname.toLowerCase();
-      const internalPatterns = [
-        /^localhost$/i,
-        /^127\./,
-        /^10\./,
-        /^192\.168\./,
-        /^172\.(1[6-9]|2[0-9]|3[01])\./,
-        /^169\.254\./,
-        /^0\./,
-        /^::1$/,
-        /^fc00:/,
-        /^fe80:/
-      ];
 
-      if (internalPatterns.some(pattern => pattern.test(hostname))) {
+      if (INTERNAL_HOST_PATTERNS.some(pattern => pattern.test(hostname))) {
         return new Response(
           JSON.stringify({ error: 'Internal network addresses not allowed', errorCode: 'INTERNAL_URL' }),
           { status: 400, headers: corsHeaders }
         );
       }
 
-      if (/[<>'"&]/.test(url)) {
+      if (/[<>'"]/.test(url)) {
         return new Response(
           JSON.stringify({ error: 'URL contains invalid characters', errorCode: 'INVALID_CHARS' }),
           { status: 400, headers: corsHeaders }
@@ -313,30 +328,9 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // For video attachments without a usable preview, mark them for client-side thumbnail generation.
-    // Client-side will use Canvas to capture the first frame for better quality.
     const siteOrigin = new URL(request.url).origin;
     for (const att of result.data!.attachments || []) {
-      if (att?.type !== 'video') continue;
-      const url = typeof att.url === 'string' ? att.url : '';
-      if (!url) continue;
-      const preview = typeof att.previewUrl === 'string' ? att.previewUrl : '';
-      const isEch0 = result.platform === 'ech0';
-      const isDerivedThumb = preview.endsWith('_thumb.jpeg') || preview.endsWith('_thumb.jpg');
-      const shouldRegeneratePreview = !preview || /^data:/i.test(preview) || (isEch0 && isDerivedThumb);
-      if (shouldRegeneratePreview) {
-        const isDirectVideo = /\.(mp4|webm|mov)$/i.test(url);
-        if (isDirectVideo) {
-          if (preview) {
-            (att as any).__candidatePreviewUrl = preview;
-            (att as any).__fallbackPreviewUrl = preview;
-          }
-          att.previewUrl = '';
-          (att as any).__needsClientThumbnail = true;
-          continue;
-        }
-
-        att.previewUrl = `${siteOrigin}/api/video-thumbnail?url=${encodeURIComponent(url)}&t=0.8`;
-      }
+      processVideoThumbnail(att, result.platform, siteOrigin);
     }
 
     // Bilibili cards: resolve title/thumbnail server-side and pass to client (plan A).
@@ -347,9 +341,7 @@ export const POST: APIRoute = async ({ request }) => {
       const textForLinks = `${result.data!.content || ''}\n${typeof extUrl === 'string' ? extUrl : ''}`;
       const candidates = extractBilibiliIds(textForLinks).slice(0, 4); // avoid runaway
 
-      for (const cand of candidates) {
-        if (linkCards.length >= 2) break;
-
+      const processBilibiliCandidate = async (cand: any) => {
         // Resolve b23.tv short links if needed
         let bvid = cand.type === 'bvid' ? cand.id : '';
         let aid = cand.type === 'aid' ? cand.id : '';
@@ -367,19 +359,28 @@ export const POST: APIRoute = async ({ request }) => {
         const canonicalUrl =
           view?.canonicalUrl ||
           (bvid ? `https://www.bilibili.com/video/${bvid}` : aid ? `https://www.bilibili.com/video/av${aid}` : '');
-        if (!canonicalUrl) continue;
+        if (!canonicalUrl) return null;
 
-        const key = `bili:${canonicalUrl}`;
-        if (linkCards.some(c => `bili:${c.url}` === key)) continue;
-
-        linkCards.push({
-          kind: 'bilibili',
+        return {
+          kind: 'bilibili' as const,
           url: canonicalUrl,
           title: view?.title,
           thumbnailUrl: view?.thumbnailUrl,
-        });
+        };
+      };
 
-        if (view?.thumbnailUrl) coverUrls.push(view.thumbnailUrl);
+      const cardResults = await Promise.allSettled(candidates.map(processBilibiliCandidate));
+
+      for (const result of cardResults) {
+        if (linkCards.length >= 2) break;
+        if (result.status === 'rejected' || !result.value) continue;
+
+        const card = result.value;
+        const key = `bili:${card.url}`;
+        if (linkCards.some(c => `bili:${c.url}` === key)) continue;
+
+        linkCards.push(card);
+        if (card.thumbnailUrl) coverUrls.push(card.thumbnailUrl);
       }
     } catch {
       // best-effort; ignore failures

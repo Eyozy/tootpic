@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}&probe=1`;
     }
 
-    async function probeVideoPreviewImage(imageUrl: string, timeoutMs: number = 900): Promise<boolean> {
+    async function probeVideoPreviewImage(imageUrl: string, timeoutMs: number = 500): Promise<boolean> {
         const controller = new AbortController();
         const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            const dataUrl = await captureClientVideoThumbnail(captureUrl, 0.8, 6000);
+            const dataUrl = await captureClientVideoThumbnail(captureUrl, 0.8, 4000);
             if (dataUrl) {
                 imageMap[videoUrl] = dataUrl;
                 (att as any).__clientThumbnailReady = true;

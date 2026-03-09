@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { buildCorsHeaders, parseEncodedUrlList } from '../../utils/netHelpers';
+import { buildCorsHeaders, parseEncodedUrlList, INTERNAL_HOST_PATTERNS } from '../../utils/netHelpers';
 
 // This must be set to false for GET requests with query params to work correctly in production.
 export const prerender = false;
@@ -8,7 +8,7 @@ export const prerender = false;
 const IMAGE_LIMITS = {
   MAX_SIZE: 10 * 1024 * 1024, // 10MB
   ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
-  TIMEOUT: 10000, // 10 seconds timeout
+  TIMEOUT: 5000, // 5 seconds timeout
   MAX_URLS: 20, // Maximum 20 images at once
 };
 
@@ -34,19 +34,7 @@ async function imageToBase64(
     const hostname = urlObj.hostname.toLowerCase();
     const allowSameOrigin = typeof opts.allowSameOrigin === 'string' ? opts.allowSameOrigin : '';
     const isSameOrigin = !!allowSameOrigin && urlObj.origin === allowSameOrigin;
-    const internalPatterns = [
-      /^localhost$/i,
-      /^127\./,
-      /^10\./,
-      /^192\.168\./,
-      /^172\.(1[6-9]|2[0-9]|3[01])\./,
-      /^169\.254\./,
-      /^0\./,
-      /^::1$/,
-      /^fc00:/,
-      /^fe80:/
-    ];
-    if (!isSameOrigin && internalPatterns.some(pattern => pattern.test(hostname))) {
+    if (!isSameOrigin && INTERNAL_HOST_PATTERNS.some(pattern => pattern.test(hostname))) {
       return { url, dataUrl: 'failed' };
     }
 
@@ -136,22 +124,10 @@ export const GET: APIRoute = async ({ request }) => {
         
         if (!['http:', 'https:'].includes(urlObj.protocol)) continue;
 
-        
+
         const hostname = urlObj.hostname.toLowerCase();
         const isSameOrigin = urlObj.origin === serverOrigin;
-        const internalPatterns = [
-          /^localhost$/i,
-          /^127\./,
-          /^10\./,
-          /^192\.168\./,
-          /^172\.(1[6-9]|2[0-9]|3[01])\./,
-          /^169\.254\./,
-          /^0\./,
-          /^::1$/,
-          /^fc00:/,
-          /^fe80:/
-        ];
-        if (!isSameOrigin && internalPatterns.some(pattern => pattern.test(hostname))) continue;
+        if (!isSameOrigin && INTERNAL_HOST_PATTERNS.some(pattern => pattern.test(hostname))) continue;
 
         // NOTE: '&' is valid in URLs; do not block it.
         if (/[<>'"]/.test(url)) continue;
@@ -169,23 +145,6 @@ export const GET: APIRoute = async ({ request }) => {
       return new Response(
         JSON.stringify({ error: 'No valid image URLs provided', errorCode: 'INVALID_URLS' }),
         { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Basic input validation
-    if (imageUrls.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: 'No valid image URLs provided',
-          suggestion: 'Please check if the urls parameter format is correct'
-        }),
-        {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
       );
     }
 
