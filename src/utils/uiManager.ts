@@ -2,7 +2,6 @@ import { templateManager } from './templateManager';
 import { imageGenerator } from './imageGenerator';
 import { domCache } from './domCache';
 import { DOM_ELEMENT_IDS } from '../constants';
-import { FediverseClient } from './fediverseClient';
 import { renderMarkdownToHtml } from './markdownRender';
 import { detectsMarkdown, computeMediaGridStyle } from './uiHelpers';
 import type { FediversePost, FediverseAttachment, FediversePoll } from '../types/activitypub';
@@ -1140,15 +1139,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="flex items-center gap-2.5">
                                 ${qAvatar ? `<img class="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5" src="${escapeHtml(qAvatar)}" alt="${qDisplayName}">` : `<div class="w-8 h-8 rounded-lg bg-gray-300 flex items-center justify-center text-xs text-gray-600 font-bold">?</div>`}
                                 <div class="min-w-0 flex-1 leading-tight">
-                                    <div class="font-bold text-xs text-primary truncate">${qDisplayName}</div>
-                                    <div class="text-[11px] text-secondary truncate mt-0.5">${qAcct}</div>
+                                    <div class="font-bold text-sm text-primary truncate">${qDisplayName}</div>
+                                    <div class="text-xs text-secondary truncate mt-0.5">${qAcct}</div>
                                 </div>
                             </div>
-                            <div class="text-xs text-secondary leading-relaxed">${sanitizeHtml(qContent)}</div>
-                            ${qPost.attachments && qPost.attachments.length > 0 && (qPost.attachments[0].previewUrl || qPost.attachments[0].url) ? `
-                            <div class="mt-2 rounded-lg overflow-hidden max-h-48 border border-brand-gray-200 bg-gray-100">
-                                <img class="w-full h-full object-cover" src="${escapeHtml(imageMap[qPost.attachments[0].previewUrl || qPost.attachments[0].url] || qPost.attachments[0].previewUrl || qPost.attachments[0].url)}" alt="${escapeHtml(qPost.attachments[0].description || 'Media')}">
-                            </div>` : ''}
+                            <div class="text-sm text-primary/90 leading-relaxed">${sanitizeHtml(qContent)}</div>
+                            ${renderQuotedMedia(qPost.attachments, imageMap)}
                         </div>
                     `;
                 }
@@ -1254,7 +1250,42 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => renderPreview(), 0);
         }
     }
+    /**
+     * Renders media attachments for quoted posts with full aspect ratio preservation.
+     */
+    function renderQuotedMedia(attachments: FediverseAttachment[] | undefined, imgMap: Record<string, string>): string {
+        if (!attachments || attachments.length === 0) return '';
+        const toDisplay = attachments.slice(0, 4);
+        const count = toDisplay.length;
+        const gridCols = count === 1 ? 'grid-cols-1' : 'grid-cols-2';
 
+        const itemsHtml = toDisplay.map(att => {
+            const displayUrl = att.previewUrl || att.url;
+            const src = imgMap[displayUrl] || displayUrl;
+            const isVideo = att.type === 'video' || att.type === 'gifv';
+            const hasAspect = att.width && att.height && count === 1;
+            const aspectStyle = hasAspect
+                ? `aspect-ratio: ${att.width} / ${att.height}; max-height: 480px;`
+                : count > 1 ? `aspect-ratio: 16 / 10;` : `max-height: 420px;`;
+
+            return `
+                <div class="relative overflow-hidden rounded-lg bg-gray-100" style="${aspectStyle}">
+                    <img class="w-full h-full object-cover" src="${escapeHtml(src)}" alt="${escapeHtml(att.description || 'Media')}">
+                    ${isVideo ? `
+                        <div class="absolute top-2 right-2 bg-black/70 text-white text-[11px] font-medium px-2 py-0.5 rounded flex items-center gap-1 z-10 backdrop-blur-xs">
+                            <svg class="w-3 h-3 fill-current" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/></svg>
+                            ${att.type === 'gifv' ? 'GIF' : 'Video'}
+                        </div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="mt-2.5 grid ${gridCols} gap-1.5 rounded-lg overflow-hidden border border-brand-gray-200">
+                ${itemsHtml}
+            </div>
+        `;
+    }
     /**
      * Renders media attachments (images/videos) into the preview card.
      * @param attachments - The list of media attachments from the post.
