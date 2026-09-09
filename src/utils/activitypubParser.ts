@@ -115,10 +115,6 @@ export function convertMastodonToUniversal(mastodonData: any): any {
     }
   });
 
-  // Log avatar for debugging
-  
-  
-
   return {
     id: mastodonData.id,
     content: mastodonData.content,
@@ -348,12 +344,7 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
     });
     account.emojis = allEmojis;
 
-    // Log avatar for debugging
-    
-    
-
     // Handle attachments
-    // Removed detailed debug output
 
     const attachments = activityPubData.attachment?.map((att: any) => {
       let attachmentType = att.type.toLowerCase();

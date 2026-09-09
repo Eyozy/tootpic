@@ -536,7 +536,6 @@ export class FediverseClient {
 
                   // Extract video thumbnail from HTML if not in ActivityPub data
                   if (activityPubData.attachment) {
-                    // Removed detailed debug output
 
                     activityPubData.attachment = activityPubData.attachment.map((att: any) => {
                       
@@ -624,14 +623,11 @@ export class FediverseClient {
         };
       }
 
-      // Log final ActivityPub data before conversion
-      // Removed detailed debug output
 
       // Convert to universal format
       const universalData = await convertActivityPubToUniversal(activityPubData, parsed.domain);
       universalData.platform = 'pixelfed';
 
-      // Removed detailed debug output
 
       return {
         success: true,
@@ -694,12 +690,6 @@ export class FediverseClient {
       } catch (emojiError) {
         console.warn('Failed to fetch Misskey emoji list:', emojiError);
       }
-
-      // Log Misskey data for debugging
-      
-      
-      
-      
 
       // Check if Misskey Note object contains embedded emojis (Misskey v13+)
       if (misskeyData.emojis && typeof misskeyData.emojis === 'object') {
@@ -810,9 +800,6 @@ export class FediverseClient {
 
       const peertubeData = await response.json();
 
-      // Log PeerTube account data for debugging
-      // Removed detailed debug output
-      // Removed detailed debug output
 
       // Get avatar URL with multiple fallbacks
       let avatarUrl = undefined;
@@ -1404,8 +1391,6 @@ export class FediverseClient {
       
 
       // Convert to universal format
-      // Debug: Log the ActivityPub data structure
-      // Removed detailed debug output
 
       const universalData = await convertActivityPubToUniversal(activityPubData, parsed.domain);
       universalData.platform = 'ech0';

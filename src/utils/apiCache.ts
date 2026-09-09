@@ -62,5 +62,3 @@ export class LRUCache<T> {
   }
 }
 
-export const fediverseApiCache = new LRUCache<any>(100, 30);
-

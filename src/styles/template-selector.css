@@ -270,7 +270,7 @@
     }
   }
 
-  /* Responsive layout - Implemented according to UI.md requirements */
+  /* Responsive layout */
 
 /* Mobile (≤ 425px) - Horizontal list layout, no description text */
 @media (max-width: 425px) {
@@ -305,7 +305,7 @@
     margin-bottom: 4px;
   }
 
-  /* Mobile no description text - According to UI.md requirements */
+  /* Mobile layout: hide description text */
   .layout-description {
     display: none;
   }
