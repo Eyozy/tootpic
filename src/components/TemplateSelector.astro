@@ -40,10 +40,10 @@ const { selectedTemplateId = 'classic' } = Astro.props;
           >
             <div class="layout-preview">
               <div class="layout-schematic layout-classic-light">
-                <Image src={classicLight} alt="Classic light theme preview" />
+                <Image src={classicLight} alt="Classic light theme preview" loading="eager" />
               </div>
               <div class="layout-schematic layout-classic-dark hidden">
-                <Image src={classicDark} alt="Classic dark theme preview" />
+                <Image src={classicDark} alt="Classic dark theme preview" loading="eager" />
               </div>
             </div>
             <div class="layout-info">
@@ -62,10 +62,10 @@ const { selectedTemplateId = 'classic' } = Astro.props;
           >
             <div class="layout-preview">
               <div class="layout-schematic layout-magazine-light">
-                 <Image src={magazineLight} alt="Magazine light theme preview" />
+                 <Image src={magazineLight} alt="Magazine light theme preview" loading="eager" />
               </div>
               <div class="layout-schematic layout-magazine-dark hidden">
-                <Image src={magazineDark} alt="Magazine dark theme preview" />
+                <Image src={magazineDark} alt="Magazine dark theme preview" loading="eager" />
               </div>
             </div>
             <div class="layout-info">
