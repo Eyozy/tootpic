@@ -1,16 +1,16 @@
 # TootPic
 
-Convert Fediverse posts into clean, beautiful, shareable images.
+TootPic turns Fediverse posts into clean, beautiful, shareable images. Supports Mastodon, Misskey, Pixelfed, PeerTube, Pleroma, and other ActivityPub platforms.
 
 ## Features
 
-- **Multi-platform support**: Works with Mastodon, Misskey, Pixelfed, PeerTube, Pleroma, and other ActivityPub platforms.
-- **Custom instance emojis**: Full rendering support for local and remote custom emojis across federated instances.
-- **Quoted post cards**: Neatly displays quoted posts beneath main content with author attribution and full-frame media.
-- **Rich content & polls**: Renders image grids, video badges, spoiler warnings (CW), and poll results accurately.
-- **Card customization**: Classic and Magazine layouts in light and dark themes, with toggles for stats, timestamps, and usernames.
-- **Export & clipboard**: Download high-res PNGs or copy directly to your clipboard, completely watermark-free.
-- **Accessibility-first**: Automatically copies post text to your clipboard as Alt text for inclusive sharing.
+- **Platform support**: Compatible with Mastodon, Misskey, Pixelfed, PeerTube, Pleroma, and ActivityPub.
+- **Custom emojis**: Full support for local and federated instance emojis.
+- **Quoted posts**: Embedded cards with author details and uncropped media preview.
+- **Rich content**: Supports image grids, video badges, content warnings, and polls.
+- **Card styles**: Classic and Magazine layouts, light and dark themes, and content toggles.
+- **Quick export**: One-click PNG download or clipboard copy, watermark-free.
+- **Alt text ready**: Automatically copies post text to clipboard for accessible sharing.
 
 ## Getting Started
 
