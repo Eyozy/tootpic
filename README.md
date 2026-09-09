@@ -1,30 +1,23 @@
 # TootPic
 
-Turn your Fediverse posts into beautiful, shareable images with just a few clicks. Supports Mastodon, Pixelfed, PeerTube, Pleroma, Misskey, and all ActivityPub-compatible platforms.
+Convert Fediverse posts into clean, beautiful, shareable images.
 
-## 🚀 Features
+## Features
 
-- **Fediverse Universal Support**: Works with Mastodon, Pixelfed, PeerTube, Pleroma, Misskey, and all ActivityPub-compatible platforms
-- **Easy to Use**: Simply paste the URL of any Fediverse post
-- **Fully Customizable**: Choose to show or hide statistics, timestamps, and usernames
-- **High-Quality Output**: Generate crisp PNG images of your posts
-- **Instant Download**: Save and share your created images effortlessly
-- **Advanced Caching**: LRU caching for improved performance and faster image generation
-- **Rate Limiting**: API endpoint protection to ensure fair usage
-- **Responsive Design**: Optimized for mobile and desktop devices
-- **ActivityPub Protocol**: Native support for the Fediverse's open protocol
+- **Multi-platform support**: Works with Mastodon, Misskey, Pixelfed, PeerTube, Pleroma, and other ActivityPub platforms.
+- **Custom instance emojis**: Full rendering support for local and remote custom emojis across federated instances.
+- **Quoted post cards**: Neatly displays quoted posts beneath main content with author attribution and full-frame media.
+- **Rich content & polls**: Renders image grids, video badges, spoiler warnings (CW), and poll results accurately.
+- **Card customization**: Classic and Magazine layouts in light and dark themes, with toggles for stats, timestamps, and usernames.
+- **Export & clipboard**: Download high-res PNGs or copy directly to your clipboard, completely watermark-free.
+- **Accessibility-first**: Automatically copies post text to your clipboard as Alt text for inclusive sharing.
 
-## 🛠️ Tech Stack
-
-- [Astro](https://astro.build/) - Modern static site builder
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
-
-## 📦 Getting Started
+## Getting Started
 
 ### Prerequisites
 
 - Node.js (v18 or higher)
-- npm or yarn
+- npm or pnpm
 
 ### Installation
 
@@ -51,19 +44,19 @@ Start the development server:
 npm run dev
 ```
 
-Open your browser and navigate to `http://localhost:4321` to see the application running.
+Open your browser and navigate to `http://localhost:4321`.
 
-## 📜 Commands
+## Commands
 
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build the project for production
 - `npm run preview` - Preview the production build locally
 - `npm run astro` - Run Astro CLI commands
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions! Please feel free to submit issues, feature requests, or pull requests.
+Contributions are welcome. Feel free to submit issues, suggestions, or pull requests.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
