@@ -1,7 +1,7 @@
 import { parseFediverseUrl, convertMastodonToUniversal, convertActivityPubToUniversal } from './activitypubParser';
-import { extractHashtagNames } from './netHelpers';
+import { extractHashtagNames, safeFetch } from './netHelpers';
 import type { FediversePost, FediverseAccount } from '../types/activitypub';
-import { SUPPORTED_PLATFORMS, PlatformConfig } from '../types/activitypub';
+import { SUPPORTED_PLATFORMS, type PlatformConfig } from '../types/activitypub';
 import { LRUCache } from './apiCache';
 
 export interface FetchPostResult {
@@ -701,9 +701,22 @@ export class FediverseClient {
       
       
 
-      // Extract emoji shortcodes from text and user name
+      // Check if Misskey Note object contains embedded emojis (Misskey v13+)
+      if (misskeyData.emojis && typeof misskeyData.emojis === 'object') {
+        if (Array.isArray(misskeyData.emojis)) {
+          misskeyData.emojis.forEach((e: any) => {
+            if (e.name && e.url) instanceEmojis.set(e.name, e.url);
+          });
+        } else {
+          Object.entries(misskeyData.emojis).forEach(([name, url]) => {
+            if (typeof url === 'string') instanceEmojis.set(name, url);
+          });
+        }
+      }
+
+      // Extract emoji shortcodes from text and user name (supporting hyphens, @, etc.)
       const textToScan = `${misskeyData.text || ''} ${misskeyData.user?.name || ''}`;
-      const emojiPattern = /:([a-zA-Z0-9_]+):/g;
+      const emojiPattern = /:([a-zA-Z0-9_~@.+-]+):/g;
       const foundEmojiNames = new Set<string>();
       let match;
 
@@ -762,8 +775,8 @@ export class FediverseClient {
         url: misskeyData.url || `https://${parsed.domain}/notes/${misskeyData.id}`,
         platform: 'misskey',
         tags: misskeyData.tags?.map((tag: string) => ({
-          name: `#${tag}`,
-          url: `https://${parsed.domain}/tags/${tag}`,
+          name: tag.replace(/^#/, ''),
+          url: `https://${parsed.domain}/tags/${encodeURIComponent(tag.replace(/^#/, ''))}`,
           type: 'hashtag' as const,
         })) || [],
       };
@@ -1386,22 +1399,7 @@ export class FediverseClient {
       // Ech0's /api/echo/<id> provides canonical extension links + tags; mutating content here risks URL truncation
       // and makes Markdown rendering inconsistent.
 
-      // Special handling for Ech0: Add GitHub project link if "Ech0" is mentioned in the content
-      // Add as plain text, not clickable link
-      const contentText = activityPubData.content?.replace(/<[^>]*>/g, '') || '';
-      const sourceContent = activityPubData.source?.content || '';
-      const fullText = contentText + ' ' + sourceContent;
 
-      if (/\bEch0\b/i.test(fullText)) {
-        
-        const ech0ProjectUrl = 'https://github.com/lin-snow/Ech0';
-
-        // Add the link to the content as plain text URL
-        if (!activityPubData.content?.includes('github.com/lin-snow/Ech0')) {
-          activityPubData.content = (activityPubData.content || '') + '\n' + ech0ProjectUrl;
-          
-        }
-      }
 
       
 
@@ -1529,7 +1527,9 @@ export class FediverseClient {
 
       // Use WebFinger to resolve the account
       const webfingerUrl = `https://${domain}/.well-known/webfinger?resource=acct:${acct}`;
-      const response = await fetch(webfingerUrl);
+      const response = await safeFetch(webfingerUrl, {
+        signal: AbortSignal.timeout(6000),
+      });
 
       if (!response.ok) return null;
 
@@ -1539,10 +1539,11 @@ export class FediverseClient {
       if (!selfLink?.href) return null;
 
       // Fetch the actor profile
-      const actorResponse = await fetch(selfLink.href, {
+      const actorResponse = await safeFetch(selfLink.href, {
         headers: {
           'Accept': 'application/activity+json',
         },
+        signal: AbortSignal.timeout(6000),
       });
 
       if (!actorResponse.ok) return null;
@@ -1564,8 +1565,7 @@ export class FediverseClient {
           staticUrl: emoji.icon.url,
         })) || [],
       };
-    } catch (error) {
-      console.error('Failed to resolve account:', error);
+    } catch {
       return null;
     }
   }
@@ -1575,48 +1575,38 @@ export class FediverseClient {
    */
   private static async fetchActivityPubObject(domain: string, objectId: string): Promise<FetchPostResult> {
     try {
-      // Try multiple possible URL patterns for ActivityPub objects
       const possibleUrls = [
-        // Direct object URL
         objectId.startsWith('http') ? objectId : null,
-        // Standard objects endpoint
         `https://${domain}/objects/${objectId}`,
-        // Posts endpoint (common for Pixelfed and others)
         `https://${domain}/p/${objectId}`,
-        // Notes endpoint (common for Misskey and others)
         `https://${domain}/notes/${objectId}`,
-        // Statuses endpoint (Mastodon-style)
         `https://${domain}/statuses/${objectId}`,
       ].filter(Boolean);
 
       let activityPubData = null;
-      let lastError = null;
 
       for (const url of possibleUrls) {
         if (!url) continue;
         try {
-          const response = await fetch(url, {
+          const response = await safeFetch(url, {
             headers: {
               'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
             },
+            signal: AbortSignal.timeout(5000),
           });
 
           if (response.ok) {
             const contentType = response.headers.get('content-type') || '';
-
             if (contentType.includes('application/json') || contentType.includes('activity+json')) {
               try {
                 activityPubData = await response.json();
-                
                 break;
-              } catch (parseError) {
-                lastError = parseError;
+              } catch {
                 continue;
               }
             }
           }
-        } catch (e) {
-          lastError = e;
+        } catch {
           continue;
         }
       }
@@ -1634,11 +1624,11 @@ export class FediverseClient {
       let postData = activityPubData;
       if (activityPubData.type === 'Create' && activityPubData.object) {
         if (typeof activityPubData.object === 'string') {
-          // Fetch the actual object
-          const objectResponse = await fetch(activityPubData.object, {
+          const objectResponse = await safeFetch(activityPubData.object, {
             headers: {
               'Accept': 'application/activity+json',
             },
+            signal: AbortSignal.timeout(5000),
           });
 
           if (objectResponse.ok) {
@@ -1657,7 +1647,6 @@ export class FediverseClient {
         platform: 'generic',
       };
     } catch (error) {
-      console.error('Generic ActivityPub fetch failed:', error);
       return {
         success: false,
         error: `Failed to fetch ActivityPub data: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1665,38 +1654,6 @@ export class FediverseClient {
         suggestion: 'This instance may not support public ActivityPub access or the post may be private.',
       };
     }
-  }
-
-  /**
-   * Get a list of supported platforms for display
-   */
-  static getSupportedPlatforms(): { name: string; examples: string[] }[] {
-    return [
-      {
-        name: 'Mastodon',
-        examples: ['https://mastodon.social/@username/1234567890', 'https://mastodon.online/users/username/statuses/1234567890'],
-      },
-      {
-        name: 'Pixelfed',
-        examples: ['https://pixelfed.social/p/username/1234567890', 'https://pixelfed.social/@username/p/1234567890'],
-      },
-      {
-        name: 'PeerTube',
-        examples: ['https://peertube.tv/videos/watch/abc123-def456'],
-      },
-      {
-        name: 'Pleroma',
-        examples: ['https://pleroma.site/objects/abc123-def456', 'https://pleroma.site/notice/abc123'],
-      },
-      {
-        name: 'Misskey',
-        examples: ['https://misskey.io/notes/abc123def456'],
-      },
-      {
-        name: 'Ech0',
-        examples: ['https://your-ech0-instance.com/posts/post123', 'https://your-ech0-instance.com/objects/abc123-def456'],
-      },
-    ];
   }
 
   /**
