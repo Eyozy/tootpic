@@ -41,7 +41,7 @@ import { Image } from 'astro:assets';
                             class="block w-full pl-12 pr-4 py-4 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400"
                             autocomplete="url"
                         >
-                        <button id="clear-url-btn" class="absolute inset-y-0 right-2 hidden items-center justify-center w-8 h-8 my-auto rounded-full bg-white hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-all duration-200 z-10" aria-label="Clear URL">
+                        <button type="button" id="clear-url-btn" class="absolute inset-y-0 right-2 hidden items-center justify-center w-8 h-8 my-auto rounded-full bg-white hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-all duration-200 z-10" aria-label="Clear URL">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -141,6 +141,21 @@ import { Image } from 'astro:assets';
                             </label>
                             </div>
                         </div>
+                        <div class="hidden" id="quote-toggle-container">
+                            <div class="flex items-center justify-between w-full">
+                                <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                    </svg>
+                                    Show Quoted Post
+                                </span>
+                                <label for="quote-toggle" class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="visibility" id="quote-toggle" value="quote" class="sr-only peer" checked>
+                                    <div class="toggle-bg w-11 h-6 bg-brand-gray-200 rounded-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-brand-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                                    <span class="sr-only">Toggle quoted post visibility</span>
+                                </label>
+                            </div>
+                        </div>
                         <div class="flex items-center justify-between">
                             <span class="text-brand-gray-700 pr-4 flex items-center gap-2">
                                 <svg class="w-4 h-4 text-brand-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -196,6 +211,7 @@ import { Image } from 'astro:assets';
 	                            <span id="content-warning-text" class="cw-text"></span>
 	                        </div>
 	                        <div id="style-a-content" class="text-primary text-base flex-grow content-container"></div>
+	                        <div id="quoted-post-container" class="mt-3 hidden"></div>
 	                        <div id="tags-container" class="mt-1 hidden"></div>
 	                        <div id="style-a-extension" class="mt-3 hidden"></div>
 	                        <div id="style-a-attachment" class="mt-3 rounded-lg overflow-hidden border bg-gray-100"></div>
@@ -321,6 +337,93 @@ import { Image } from 'astro:assets';
         /* Hidden state - use display none for initial state, transitions handled by JS */
         .content-warning-cw.hidden {
             display: none;
+        }
+
+        /* Smooth transitions for card toggled elements */
+        :global(.quoted-post-card) {
+            transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: top;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        :global(.quoted-post-card.quote-collapsed) {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            transform: scaleY(0.95) !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            border-width: 0 !important;
+            pointer-events: none;
+        }
+
+        :global(.quoted-post-card.quote-expanded) {
+            max-height: 600px;
+            opacity: 1;
+            transform: scaleY(1);
+        }
+
+        :global(.toggle-transition) {
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: top;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        :global(.toggle-collapsed) {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            transform: scaleY(0.95) !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            border-top-width: 0 !important;
+            pointer-events: none;
+        }
+
+        :global(.toggle-expanded) {
+            max-height: 120px;
+            opacity: 1;
+            transform: scaleY(1);
+        }
+
+        /* Smooth inline transitions for instance name */
+        :global(.instance-part) {
+            display: inline-block;
+            vertical-align: bottom;
+            max-width: 350px;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: left;
+        }
+
+        :global(.instance-part.instance-visible) {
+            max-width: 350px;
+            opacity: 1;
+            transform: scaleX(1);
+        }
+
+        :global(.instance-part.instance-hidden) {
+            max-width: 0 !important;
+            opacity: 0 !important;
+            transform: scaleX(0.9) !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            pointer-events: none;
         }
 
         /* Template adaptations */

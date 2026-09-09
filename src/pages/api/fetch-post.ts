@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { FediverseClient } from '../../utils/fediverseClient';
-import { buildCorsHeaders, normalizeAndDedupeAttachments, INTERNAL_HOST_PATTERNS } from '../../utils/netHelpers';
+import { buildCorsHeaders, normalizeAndDedupeAttachments, isSafeRemoteHttpUrl } from '../../utils/netHelpers';
 
 function extractBilibiliIds(text: string): Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> {
   const out: Array<{ type: 'bvid' | 'aid'; id: string; sourceUrl?: string }> = [];
@@ -57,6 +57,9 @@ function extractBilibiliIds(text: string): Array<{ type: 'bvid' | 'aid'; id: str
 
 async function resolveB23ToCanonical(url: string): Promise<string | null> {
   try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== 'b23.tv' && !host.endsWith('.b23.tv')) return null;
     const res = await fetch(url, {
       redirect: 'follow',
       headers: {
@@ -114,6 +117,7 @@ class RateLimiter {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 5 * 60 * 1000);
+    this.cleanupInterval.unref?.();
   }
 
   check(clientIp: string): boolean {
@@ -175,14 +179,19 @@ class RateLimiter {
 const rateLimiter = new RateLimiter(50, 60 * 60 * 1000); // 50 requests per hour
 
 function getClientIP(request: Request): string {
-  // Priority: X-Forwarded-For > X-Real-IP > CF-Connecting-IP
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  const vercelIP = request.headers.get('x-vercel-forwarded-for');
+  if (vercelIP) return vercelIP.split(',')[0].trim();
+
+  const cfIP = request.headers.get('cf-connecting-ip');
+  if (cfIP) return cfIP;
 
   const realIP = request.headers.get('x-real-ip');
   if (realIP) return realIP;
 
-  return request.headers.get('cf-connecting-ip') || 'unknown';
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+
+  return 'unknown';
 }
 
 function processVideoThumbnail(att: any, platform: string, siteOrigin: string): void {
@@ -231,30 +240,18 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const body = await request.json();
-    const { url } = body;
-
-    if (!url) {
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: 'Please provide a URL' }),
-        {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
-      );
-    }
-
-    if (!body || typeof body !== 'object') {
-      return new Response(
-        JSON.stringify({ error: 'Invalid request body', errorCode: 'INVALID_BODY' }),
+        JSON.stringify({ error: 'Invalid JSON body', errorCode: 'INVALID_BODY' }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    if (!url || typeof url !== 'string') {
+    const url = typeof body?.url === 'string' ? body.url.trim() : '';
+    if (!url) {
       return new Response(
         JSON.stringify({ error: 'Please provide a valid URL', errorCode: 'MISSING_URL' }),
         { status: 400, headers: corsHeaders }
@@ -268,35 +265,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    try {
-      const urlObj = new URL(url);
-      if (!['http:', 'https:'].includes(urlObj.protocol)) {
-        return new Response(
-          JSON.stringify({ error: 'URL must use HTTP or HTTPS', errorCode: 'INVALID_PROTOCOL' }),
-          { status: 400, headers: corsHeaders }
-        );
-      }
-
-      // Block internal network addresses
-      const hostname = urlObj.hostname.toLowerCase();
-
-      if (INTERNAL_HOST_PATTERNS.some(pattern => pattern.test(hostname))) {
-        return new Response(
-          JSON.stringify({ error: 'Internal network addresses not allowed', errorCode: 'INTERNAL_URL' }),
-          { status: 400, headers: corsHeaders }
-        );
-      }
-
-      if (/[<>'"]/.test(url)) {
-        return new Response(
-          JSON.stringify({ error: 'URL contains invalid characters', errorCode: 'INVALID_CHARS' }),
-          { status: 400, headers: corsHeaders }
-        );
-      }
-
-    } catch (error) {
+    if (!isSafeRemoteHttpUrl(url)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid URL format', errorCode: 'INVALID_URL_FORMAT' }),
+        JSON.stringify({ error: 'Invalid or forbidden URL', errorCode: 'INVALID_URL' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -330,7 +301,7 @@ export const POST: APIRoute = async ({ request }) => {
     // For video attachments without a usable preview, mark them for client-side thumbnail generation.
     const siteOrigin = new URL(request.url).origin;
     for (const att of result.data!.attachments || []) {
-      processVideoThumbnail(att, result.platform, siteOrigin);
+      processVideoThumbnail(att, result.platform || '', siteOrigin);
     }
 
     // Bilibili cards: resolve title/thumbnail server-side and pass to client (plan A).
@@ -390,6 +361,22 @@ export const POST: APIRoute = async ({ request }) => {
       (result.data as any).linkCards = linkCards;
     }
 
+    // Resolve quoted post if not already provided by platform API
+    if (result.data && !result.data.quotedPost && result.data.content) {
+      const quoteMatch = result.data.content.match(/<p class="quote-inline">RE:\s*<a[^>]*href="([^"]+)"/i) ||
+                         result.data.content.match(/\bRE:\s*<a[^>]*href="(https?:\/\/[^"]+)"/i);
+      if (quoteMatch && quoteMatch[1]) {
+        try {
+          const qRes = await FediverseClient.fetchPost(quoteMatch[1]);
+          if (qRes.success && qRes.data) {
+            result.data.quotedPost = qRes.data;
+          }
+        } catch {
+          // Best effort; ignore failures
+        }
+      }
+    }
+
     // Collect image URLs from the post data
     const imageUrls = [
       // Post attachments - handle different types
@@ -435,11 +422,16 @@ export const POST: APIRoute = async ({ request }) => {
       }),
       // User avatar (if available)
       ...(result.data!.account.avatar ? [result.data!.account.avatar] : []),
-      // User emojis
-      ...result.data!.account.emojis.map(emoji => emoji.url)
-      ,
+      // Emojis (both account and post content)
+      ...(result.data!.account?.emojis ? result.data!.account.emojis.map(emoji => emoji.url) : []),
+      ...((result.data as any)?.emojis ? (result.data as any).emojis.map((emoji: any) => emoji.url) : []),
       // Link card covers (e.g. bilibili)
-      ...coverUrls
+      ...coverUrls,
+      // Quoted post media
+      ...(result.data?.quotedPost?.account?.avatar ? [result.data.quotedPost.account.avatar] : []),
+      ...(result.data?.quotedPost?.account?.emojis ? result.data.quotedPost.account.emojis.map(e => e.url) : []),
+      ...((result.data?.quotedPost as any)?.emojis ? (result.data?.quotedPost as any).emojis.map((e: any) => e.url) : []),
+      ...(result.data?.quotedPost?.attachments ? result.data.quotedPost.attachments.map(a => a.previewUrl || a.url) : []),
     ].filter(url => url && typeof url === 'string' && url.trim() !== '');
 
     const uniqueImageUrls = Array.from(new Set(imageUrls));
@@ -474,24 +466,18 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     console.error('API error occurred:', error);
 
-    let errorMessage = 'Internal server error';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === 'string') {
-      errorMessage = error;
-    }
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
 
     return new Response(
       JSON.stringify({
         error: errorMessage,
-        details: String(error)
       }),
       {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          ...corsHeaders
-        }
+          ...corsHeaders,
+        },
       }
     );
   }

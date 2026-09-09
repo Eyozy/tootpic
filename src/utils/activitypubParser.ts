@@ -1,4 +1,5 @@
-import { PlatformConfig, SUPPORTED_PLATFORMS } from '../types/activitypub';
+import { type PlatformConfig, SUPPORTED_PLATFORMS } from '../types/activitypub';
+import { safeFetch } from './netHelpers';
 
 export interface ParsedUrl {
   platform: string;
@@ -87,70 +88,7 @@ export function parseFediverseUrl(url: string): ParsedUrl | null {
   }
 }
 
-/**
- * Detect if a URL is from a supported Fediverse platform
- */
-export function isSupportedFediverseUrl(url: string): boolean {
-  return parseFediverseUrl(url) !== null;
-}
 
-/**
- * Get platform configuration for a given URL
- */
-export function getPlatformConfig(url: string): PlatformConfig | null {
-  const parsed = parseFediverseUrl(url);
-  return parsed ? SUPPORTED_PLATFORMS[parsed.platform] : null;
-}
-
-/**
- * Normalize different post IDs to a consistent format
- */
-export function normalizePostId(platform: string, id: string): string {
-  switch (platform) {
-    case 'mastodon':
-    case 'pleroma':
-    case 'pixelfed':
-      // These platforms typically use numeric IDs
-      return id;
-    case 'misskey':
-      // Misskey uses alphanumeric IDs
-      return id;
-    case 'peertube':
-      // PeerTube uses UUID for videos
-      return id;
-    case 'generic':
-      // For generic, try to detect ID format
-      if (/^\d+$/.test(id)) {
-        return id; // Numeric ID
-      } else if (/^[a-f0-9-]{36}$/i.test(id)) {
-        return id; // UUID
-      } else {
-        return id; // Keep as-is
-      }
-    default:
-      return id;
-  }
-}
-
-/**
- * Extract username from URL if available
- */
-export function extractUsername(url: string): string | null {
-  const parsed = parseFediverseUrl(url);
-  return parsed?.username || null;
-}
-
-/**
- * Extract domain from URL
- */
-export function extractDomain(url: string): string | null {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.hostname;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Convert Mastodon format to our universal Fediverse format
@@ -273,30 +211,107 @@ export function convertMastodonToUniversal(mastodonData: any): any {
       voted: mastodonData.poll.voted,
       own_votes: mastodonData.poll.own_votes,
     } : undefined,
+    emojis: allEmojis,
+    quotedPost: (mastodonData.quote?.quoted_status || mastodonData.quoted_status)
+      ? convertMastodonToUniversal(mastodonData.quote?.quoted_status || mastodonData.quoted_status)
+      : undefined,
   };
 }
 
-/**
- * Fetch user object from ActivityPub actor URL
- */
 async function fetchUserObject(actorUrl: string): Promise<any> {
   try {
-    const response = await fetch(actorUrl, {
+    const response = await safeFetch(actorUrl, {
       headers: {
-        'Accept': 'application/activity+json, application/ld+json, application/json'
-      }
+        'Accept': 'application/activity+json, application/ld+json, application/json',
+      },
+      signal: AbortSignal.timeout(6000),
     });
 
     if (!response.ok) {
       return null;
     }
 
-    const userObject = await response.json();
-
-    return userObject;
-  } catch (error) {
+    return await response.json();
+  } catch {
     return null;
   }
+}
+
+function extractEmojisFromActorTags(tags: any): Array<{ shortcode: string; url: string; staticUrl: string }> {
+  const rawTags = Array.isArray(tags) ? tags : (tags ? [tags] : []);
+  return rawTags
+    .filter((tag: any) => tag && tag.type === 'Emoji')
+    .map((emoji: any) => {
+      const emojiUrl = emoji.icon?.url || emoji.icon?.href || (typeof emoji.icon === 'string' ? emoji.icon : '') || emoji.url;
+      return {
+        shortcode: emoji.name?.replace(/:/g, '') || emoji.shortcode,
+        url: emojiUrl,
+        staticUrl: emojiUrl,
+      };
+    })
+    .filter((e: any) => e.shortcode && e.url);
+}
+
+async function parseActorAccount(attributedTo: any, platform: string): Promise<any> {
+  const defaultAccount = {
+    id: 'unknown',
+    username: 'unknown',
+    displayName: 'Unknown User',
+    avatar: undefined,
+    url: '',
+    acct: 'unknown',
+    platform,
+    emojis: [],
+  };
+
+  if (!attributedTo) return defaultAccount;
+
+  let actor = attributedTo;
+  let fallbackDomain = 'unknown';
+
+  if (typeof attributedTo === 'string') {
+    try {
+      fallbackDomain = new URL(attributedTo).hostname;
+    } catch {
+      // ignore
+    }
+    actor = await fetchUserObject(attributedTo);
+    if (!actor) {
+      const username = attributedTo.split('/').pop() || 'unknown';
+      return {
+        id: attributedTo,
+        username,
+        displayName: username,
+        avatar: undefined,
+        url: attributedTo,
+        acct: `${username}@${fallbackDomain}`,
+        platform,
+        emojis: [],
+      };
+    }
+  }
+
+  let actorDomain = fallbackDomain;
+  try {
+    const domainUrl = actor.id || (typeof attributedTo === 'string' ? attributedTo : '');
+    if (domainUrl) actorDomain = new URL(domainUrl).hostname || actorDomain;
+  } catch {
+    // ignore
+  }
+
+  const username = actor.preferredUsername || actor.id?.split('/').pop() || 'unknown';
+  const avatarUrl = actor.icon?.url || actor.icon?.href || actor.image?.url || actor.image?.href;
+
+  return {
+    id: actor.id || 'unknown',
+    username,
+    displayName: actor.name || username,
+    avatar: avatarUrl,
+    url: actor.url || actor.id || '',
+    acct: `${username}@${actorDomain}`,
+    platform,
+    emojis: extractEmojisFromActorTags(actor.tag),
+  };
 }
 
 /**
@@ -311,101 +326,18 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
     const updatedAt = activityPubData.updated;
 
     // Handle account/actor information
-    let account;
-    if (activityPubData.attributedTo) {
-      if (typeof activityPubData.attributedTo === 'string') {
-        // Fetch user object to get complete information including avatar
-        const userObject = await fetchUserObject(activityPubData.attributedTo);
+    const account = await parseActorAccount(activityPubData.attributedTo, platform);
 
-        if (userObject) {
-          // Extract emojis from user's tag array
-          const userEmojis = userObject.tag?.filter((tag: any) => tag.type === 'Emoji').map((emoji: any) => ({
-            shortcode: emoji.name?.replace(/:/g, '') || emoji.shortcode,
-            url: emoji.icon?.url || emoji.url,
-            staticUrl: emoji.icon?.url || emoji.url,
-          })) || [];
-
-          // Try multiple fields for avatar from fetched user object
-          const avatarUrl = userObject.icon?.url ||
-                           userObject.icon?.href ||
-                           userObject.image?.url ||
-                           userObject.image?.href;
-
-          
-
-          const domain = new URL(activityPubData.attributedTo).hostname;
-          account = {
-            id: userObject.id,
-            username: userObject.preferredUsername || activityPubData.attributedTo.split('/').pop(),
-            displayName: userObject.name || userObject.preferredUsername || activityPubData.attributedTo.split('/').pop(),
-            avatar: avatarUrl,
-            url: userObject.url || userObject.id,
-            acct: userObject.preferredUsername ? `${userObject.preferredUsername}@${domain}` : `${userObject.preferredUsername || activityPubData.attributedTo.split('/').pop()}@${domain}`,
-            platform,
-            emojis: userEmojis,
-          };
-        } else {
-          // Fallback if user object fetch fails
-          const username = activityPubData.attributedTo.split('/').pop();
-          const domain = new URL(activityPubData.attributedTo).hostname;
-          account = {
-            id: activityPubData.attributedTo,
-            username: username,
-            displayName: username,
-            avatar: undefined, // No avatar available
-            url: activityPubData.attributedTo,
-            acct: `${username}@${domain}`,
-            platform,
-            emojis: [],
-          };
-        }
-      } else {
-        // Extract emojis from actor's tag array
-        const actorEmojis = activityPubData.attributedTo.tag?.filter((tag: any) => tag.type === 'Emoji').map((emoji: any) => ({
-          shortcode: emoji.name?.replace(/:/g, '') || emoji.shortcode,
-          url: emoji.icon?.url || emoji.url,
-          staticUrl: emoji.icon?.url || emoji.url,
-        })) || [];
-
-        // Try multiple fields for avatar
-        const avatarUrl = activityPubData.attributedTo.icon?.url ||
-                         activityPubData.attributedTo.icon?.href ||
-                         activityPubData.attributedTo.image?.url ||
-                         activityPubData.attributedTo.image?.href;
-
-        // Get domain from attributedTo ID
-        const actorDomain = new URL(activityPubData.attributedTo.id || '').hostname || 'unknown';
-
-        account = {
-          id: activityPubData.attributedTo.id,
-          username: activityPubData.attributedTo.preferredUsername,
-          displayName: activityPubData.attributedTo.name || activityPubData.attributedTo.preferredUsername,
-          avatar: avatarUrl,
-          url: activityPubData.attributedTo.url || activityPubData.attributedTo.id,
-          acct: activityPubData.attributedTo.preferredUsername ? `${activityPubData.attributedTo.preferredUsername}@${actorDomain}` : `${activityPubData.attributedTo.preferredUsername || activityPubData.attributedTo.id?.split('/').pop() || 'unknown'}@${actorDomain}`,
-          platform,
-          emojis: actorEmojis,
-        };
-      }
-    } else {
-      // Fallback account info
-      account = {
-        id: 'unknown',
-        username: 'unknown',
-        displayName: 'Unknown User',
-        url: '',
-        acct: '',
-        platform,
-        emojis: [],
+    // Extract emojis from post content's tag array (safely handle non-array tags)
+    const rawContentTags = Array.isArray(activityPubData.tag) ? activityPubData.tag : (activityPubData.tag ? [activityPubData.tag] : []);
+    const contentEmojis = rawContentTags.filter((tag: any) => tag && tag.type === 'Emoji').map((emoji: any) => {
+      const emojiUrl = emoji.icon?.url || emoji.icon?.href || (typeof emoji.icon === 'string' ? emoji.icon : '') || emoji.url;
+      return {
+        shortcode: emoji.name?.replace(/:/g, '') || emoji.shortcode,
+        url: emojiUrl,
+        staticUrl: emojiUrl,
       };
-    }
-
-    // Extract emojis from post content's tag array
-    const contentEmojis = activityPubData.tag?.filter((tag: any) => tag.type === 'Emoji').map((emoji: any) => ({
-      shortcode: emoji.name?.replace(/:/g, '') || emoji.shortcode,
-      url: emoji.icon?.url || emoji.url,
-      staticUrl: emoji.icon?.url || emoji.url,
-    })) || [];
+    }).filter((e: any) => e.shortcode && e.url) || [];
 
     // Merge account and content emojis, removing duplicates
     const allEmojis = [...account.emojis];
@@ -562,6 +494,7 @@ export async function convertActivityPubToUniversal(activityPubData: any, platfo
       inReplyTo: activityPubData.inReplyTo,
       tags,
       poll,
+      emojis: allEmojis,
     };
   } catch (error) {
     console.error('Error converting ActivityPub to universal format:', error);

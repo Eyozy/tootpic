@@ -65,12 +65,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentWarningText = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TEXT) as HTMLSpanElement;
     const contentWarningToggle = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
     const contentWarningToggleContainer = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
+    const quoteToggleContainer = domCache.getElement('quote-toggle-container') as HTMLDivElement;
     const extensionContainer = domCache.getElement(DOM_ELEMENT_IDS.EXTENSION) as HTMLDivElement;
 
     let postData: FediversePost | null = null;
     let fetchedInstance = '';
     let imageMap: Record<string, string> = {};
-    let visibility = { stats: true, timestamp: true, instance: true, contentWarning: true };
+    let visibility = { stats: true, timestamp: true, instance: true, contentWarning: true, quote: true };
     let eventSource: EventSource | null = null;
     let loadedImageUrls = new Set<string>();
     let failedImageUrls = new Set<string>();
@@ -262,8 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     generateBtn?.addEventListener('click', fetchFediversePost);
-    urlInput?.addEventListener('input', toggleClearButtonVisibility);
+    ['input', 'focus', 'change'].forEach(event => {
+        urlInput?.addEventListener(event, toggleClearButtonVisibility);
+    });
+    urlInput?.addEventListener('paste', () => setTimeout(toggleClearButtonVisibility, 0));
     clearUrlBtn?.addEventListener('click', clearUrlInput);
+    toggleClearButtonVisibility();
     downloadBtn?.addEventListener('click', () => imageGenerator.generateAndDownload().catch(err => {
         showError('Image generation failed.');
         // Reset download button state on error
@@ -386,8 +391,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     contentWarningToggleContainer.classList.add('hidden');
                 }
             }
-
-            // If we already have image URLs from the server, use them
+            if (quoteToggleContainer && postData) {
+                if (postData.quotedPost) {
+                    quoteToggleContainer.classList.remove('hidden');
+                } else {
+                    quoteToggleContainer.classList.add('hidden');
+                }
+            }
             let imageUrls: string[] = [];
             const origin = window.location.origin;
             await prefetchClientVideoThumbnails(postData, origin);
@@ -443,6 +453,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     contentWarningToggleContainer.classList.remove('hidden');
                 } else {
                     contentWarningToggleContainer.classList.add('hidden');
+                }
+            }
+            if (quoteToggleContainer && postData) {
+                if (postData.quotedPost) {
+                    quoteToggleContainer.classList.remove('hidden');
+                } else {
+                    quoteToggleContainer.classList.add('hidden');
                 }
             }
 
@@ -720,13 +737,19 @@ document.addEventListener('DOMContentLoaded', () => {
             contentHTML = `<div class="text-xl font-bold mb-3">${videoTitle}</div>`;
         }
 
-        // If content is Markdown (including HTML-wrapped Markdown), render it so the preview matches site output.
+        // If post quotes another post, strip the inline RE: link from main content
+        if (sourcePost.quotedPost && typeof contentHTML === 'string') {
+            contentHTML = contentHTML.replace(/<p\s+class=["']quote-inline["'][^>]*>[\s\S]*?<\/p>/gi, '');
+            contentHTML = contentHTML.replace(/^(\s*<p[^>]*>)?\s*RE:\s*<a[^>]*href=["'][^"']*["'][^>]*>[\s\S]*?<\/a>(\s*<\/p>)?/gi, '');
+        }
+
+        // If content is Markdown or plain text, render it so the preview matches site output.
         if (typeof contentHTML === 'string') {
             const looksLikeHtmlTag = /<\/?[a-z][\w:-]*\b[^>]*>/i.test(contentHTML);
             const markdownHint = (text: string) => detectsMarkdown(text);
 
-            if (!looksLikeHtmlTag && markdownHint(contentHTML)) {
-                // Plain text / Markdown: render it (also linkifies bare URLs).
+            if (!looksLikeHtmlTag) {
+                // Plain text / Markdown (e.g. Misskey, Ech0, plain ActivityPub notes): render it (also linkifies bare URLs).
                 contentHTML = renderMarkdownToHtml(contentHTML, { preferLinkHref: sourcePost.platform === 'ech0' });
             } else if (looksLikeHtmlTag) {
                 // HTML-wrapped content: if it still looks like Markdown after stripping tags, re-render from textContent.
@@ -935,75 +958,44 @@ document.addEventListener('DOMContentLoaded', () => {
             removeAdjacentDuplicateLinks(tempDiv);
         }
 
+        // Convert and style unlinked hashtags in text nodes (e.g. Misskey, plain text notes)
+        if (Array.isArray(sourcePost.tags) && sourcePost.tags.length > 0) {
+            const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT);
+            const textNodes: Text[] = [];
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+                const parent = node.parentElement;
+                if (parent && parent.tagName.toLowerCase() !== 'a' && parent.tagName.toLowerCase() !== 'code' && parent.tagName.toLowerCase() !== 'pre') {
+                    textNodes.push(node as Text);
+                }
+            }
+
+            sourcePost.tags.forEach(t => {
+                const cleanName = (t.name || '').replace(/^#/, '').trim();
+                if (!cleanName) return;
+                const tagUrl = t.url || `#/tags/${encodeURIComponent(cleanName)}`;
+                const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(^|[\\s\\(\\[\\{<（【《「“"‘/])#(${escaped})(?=$|[\\s\\)\\]\\}>）】》」”"’.,!?:;，。！？/])`, 'gi');
+
+                textNodes.forEach(tn => {
+                    if (!tn.parentNode) return;
+                    const val = tn.nodeValue || '';
+                    if (regex.test(val)) {
+                        regex.lastIndex = 0;
+                        const span = document.createElement('span');
+                        span.innerHTML = val.replace(regex, (_m, prefix, tag) => {
+                            return `${prefix}<a href="${tagUrl}" target="_blank" rel="nofollow noopener noreferrer" class="mention hashtag inline-block text-blue-600 hover:text-blue-800 font-medium">#${tag}</a>`;
+                        });
+                        tn.parentNode.replaceChild(span, tn);
+                    }
+                });
+            });
+        }
+
         // Style hashtags in content to make them more visible
         tempDiv.querySelectorAll('a.hashtag').forEach(hashtag => {
             hashtag.classList.add('inline-block', 'text-blue-600', 'hover:text-blue-800', 'font-medium');
         });
-
-        contentHTML = tempDiv.innerHTML;
-
-        const allEmojis = sourcePost.account.emojis || [];
-
-        /**
-         * Optimized emoji replacement using single regex
-         */
-        function replaceEmojis(content: string, emojis: typeof allEmojis): string {
-            const emojiMap = new Map<string, string>();
-
-            emojis.forEach(emoji => {
-                const dataUrl = imageMap[emoji.url];
-                let imgTag: string;
-
-                if (dataUrl && dataUrl !== 'failed') {
-                    imgTag = `<img src="${dataUrl}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
-                } else if (imageMap[emoji.url] === undefined) {
-                    imgTag = `<img src="${emoji.url}" alt=":${emoji.shortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${emoji.shortcode}:'">`;
-                } else {
-                    imgTag = `:${emoji.shortcode}:`;
-                }
-
-                emojiMap.set(emoji.shortcode.toLowerCase(), imgTag);
-            });
-
-            return content.replace(/:([a-zA-Z0-9_]+):/g, (match, shortcode) => {
-                return emojiMap.get(shortcode.toLowerCase()) || match;
-            });
-        }
-
-        contentHTML = replaceEmojis(contentHTML, allEmojis);
-
-        // Escape displayName first, then apply emoji replacement
-        let displayNameHTML = escapeHtml(sourcePost.account.displayName || '');
-        displayNameHTML = replaceEmojis(displayNameHTML, sourcePost.account.emojis || []);
-
-
-
-        // --- 2.5 Process Tags ---
-        // Render hashtags into the dedicated tags container so they reliably show up in the image.
-        const tagsContainer = document.getElementById('tags-container') as HTMLDivElement | null;
-        if (tagsContainer) {
-            tagsContainer.innerHTML = '';
-            tagsContainer.classList.add('hidden');
-
-            const hashtagTags = Array.isArray(sourcePost.tags) ? sourcePost.tags.filter(t => t.type === 'hashtag') : [];
-            if (hashtagTags.length > 0) {
-                const wrap = document.createElement('div');
-                wrap.className = 'flex flex-wrap gap-1';
-
-                hashtagTags.slice(0, 12).forEach(t => {
-                    const a = document.createElement('a');
-                    a.href = t.url;
-                    a.target = '_blank';
-                    a.rel = 'nofollow noopener noreferrer';
-                    a.textContent = t.name;
-                    a.className = 'inline-block text-blue-600 hover:text-blue-800 font-medium hashtag';
-                    wrap.appendChild(a);
-                });
-
-                tagsContainer.appendChild(wrap);
-                tagsContainer.classList.remove('hidden');
-            }
-        }
 
         // --- 2.6 Ech0 Extension (MUSIC/VIDEO/WEBSITE/...) ---
         // Do not render extension as a card; append the extension URL to content as a link.
@@ -1030,8 +1022,150 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Update contentHTML with extension modifications.
         contentHTML = tempDiv.innerHTML;
+
+        const rawAccountEmojis = sourcePost.account?.emojis || [];
+        const rawPostEmojis = (sourcePost as any).emojis || [];
+        const allEmojis = [...rawAccountEmojis];
+        rawPostEmojis.forEach((emoji: any) => {
+            if (!allEmojis.find((e: any) => e.shortcode === emoji.shortcode)) {
+                allEmojis.push(emoji);
+            }
+        });
+
+        /**
+         * Optimized emoji replacement supporting extended shortcodes (hyphens, dots, @, etc.)
+         */
+        function replaceEmojis(content: string, emojis: typeof allEmojis): string {
+            if (!emojis || emojis.length === 0 || !content) return content;
+            const emojiMap = new Map<string, string>();
+
+            emojis.forEach(emoji => {
+                const dataUrl = imageMap[emoji.url];
+                let imgTag: string;
+                const safeShortcode = escapeHtml(emoji.shortcode);
+                const safeUrl = escapeHtml(emoji.url);
+
+                if (dataUrl && dataUrl !== 'failed') {
+                    imgTag = `<img src="${escapeHtml(dataUrl)}" alt=":${safeShortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom">`;
+                } else if (imageMap[emoji.url] === undefined) {
+                    imgTag = `<img src="${safeUrl}" alt=":${safeShortcode}:" class="custom-emoji inline-block w-5 h-5 align-text-bottom" onerror="this.onerror=null; this.outerHTML=':${safeShortcode}:'">`;
+                } else {
+                    imgTag = `:${safeShortcode}:`;
+                }
+
+                emojiMap.set(emoji.shortcode.toLowerCase(), imgTag);
+            });
+
+            return content.replace(/:([a-zA-Z0-9_~@.+-]+):/g, (match, shortcode) => {
+                return emojiMap.get(shortcode.toLowerCase()) || match;
+            });
+        }
+
+        contentHTML = replaceEmojis(contentHTML, allEmojis);
+
+        // Escape displayName first, then apply emoji replacement
+        let displayNameHTML = escapeHtml(sourcePost.account.displayName || '');
+        displayNameHTML = replaceEmojis(displayNameHTML, allEmojis);
+
+        // --- 2.5 Process Tags with Smart Deduplication ---
+        const tagsContainer = document.getElementById('tags-container') as HTMLDivElement | null;
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+            tagsContainer.classList.add('hidden');
+
+            const contentHashtagNames = new Set<string>();
+            tempDiv.querySelectorAll('a').forEach(a => {
+                const isHashtagLink = a.classList.contains('hashtag') || /\/tags\//i.test(a.href || '') || (a.getAttribute('rel') || '').includes('tag');
+                if (isHashtagLink) {
+                    const cleanText = (a.textContent || '').replace(/^#/, '').trim().toLowerCase();
+                    if (cleanText) contentHashtagNames.add(cleanText);
+                    try {
+                        const urlObj = new URL(a.href);
+                        const pathTag = decodeURIComponent(urlObj.pathname.split('/').filter(Boolean).pop() || '').toLowerCase();
+                        if (pathTag) contentHashtagNames.add(pathTag);
+                    } catch {}
+                }
+            });
+
+            const contentTextLower = (tempDiv.textContent || '').toLowerCase();
+            const hashtagTags = (Array.isArray(sourcePost.tags) ? sourcePost.tags.filter(t => t.type === 'hashtag') : [])
+                .filter(t => {
+                    const cleanName = (t.name || '').replace(/^#/, '').trim().toLowerCase();
+                    if (!cleanName) return false;
+                    if (contentHashtagNames.has(cleanName)) return false;
+                    if (contentTextLower.includes('#' + cleanName)) return false;
+                    return true;
+                });
+
+            if (hashtagTags.length > 0) {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex flex-wrap gap-1';
+
+                hashtagTags.slice(0, 12).forEach(t => {
+                    const a = document.createElement('a');
+                    a.href = t.url;
+                    a.target = '_blank';
+                    a.rel = 'nofollow noopener noreferrer';
+                    a.textContent = `#${(t.name || '').replace(/^#/, '').trim()}`;
+                    a.className = 'inline-block text-blue-600 hover:text-blue-800 font-medium hashtag';
+                    wrap.appendChild(a);
+                });
+
+                tagsContainer.appendChild(wrap);
+                tagsContainer.classList.remove('hidden');
+            }
+        }
+
+        // --- 2.6 Render Quoted Post Card with Smooth Transitions ---
+        const quotedContainer = document.getElementById('quoted-post-container') as HTMLDivElement | null;
+        if (quotedContainer) {
+            quotedContainer.classList.add('quoted-post-card');
+
+            if (sourcePost.quotedPost) {
+                if (!quotedContainer.querySelector('.quoted-post-inner')) {
+                    const qPost = sourcePost.quotedPost;
+                    const qAvatar = imageMap[qPost.account?.avatar || ''] || qPost.account?.avatar || '';
+                    let qDisplayName = escapeHtml(qPost.account?.displayName || qPost.account?.username || '');
+                    const qAcct = escapeHtml(qPost.account?.acct?.includes('@') ? `@${qPost.account.acct}` : `@${qPost.account?.acct || ''}`);
+
+                    let qContent = qPost.content || '';
+                    const qEmojis = [...(qPost.account?.emojis || []), ...((qPost as any).emojis || [])];
+                    qDisplayName = replaceEmojis(qDisplayName, qEmojis);
+                    qContent = replaceEmojis(qContent, qEmojis);
+
+                    quotedContainer.className = 'quoted-post-card mt-3 rounded-xl border border-brand-gray-200 bg-gray-50/80 dark:bg-gray-800/50 p-3.5 space-y-2';
+                    quotedContainer.innerHTML = `
+                        <div class="quoted-post-inner space-y-2">
+                            <div class="flex items-center gap-2.5">
+                                ${qAvatar ? `<img class="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5" src="${escapeHtml(qAvatar)}" alt="${qDisplayName}">` : `<div class="w-8 h-8 rounded-lg bg-gray-300 flex items-center justify-center text-xs text-gray-600 font-bold">?</div>`}
+                                <div class="min-w-0 flex-1 leading-tight">
+                                    <div class="font-bold text-xs text-primary truncate">${qDisplayName}</div>
+                                    <div class="text-[11px] text-secondary truncate mt-0.5">${qAcct}</div>
+                                </div>
+                            </div>
+                            <div class="text-xs text-secondary leading-relaxed">${sanitizeHtml(qContent)}</div>
+                            ${qPost.attachments && qPost.attachments.length > 0 && (qPost.attachments[0].previewUrl || qPost.attachments[0].url) ? `
+                            <div class="mt-2 rounded-lg overflow-hidden max-h-48 border border-brand-gray-200 bg-gray-100">
+                                <img class="w-full h-full object-cover" src="${escapeHtml(imageMap[qPost.attachments[0].previewUrl || qPost.attachments[0].url] || qPost.attachments[0].previewUrl || qPost.attachments[0].url)}" alt="${escapeHtml(qPost.attachments[0].description || 'Media')}">
+                            </div>` : ''}
+                        </div>
+                    `;
+                }
+
+                if (visibility.quote) {
+                    quotedContainer.classList.remove('hidden', 'quote-collapsed');
+                    quotedContainer.classList.add('quote-expanded');
+                } else {
+                    quotedContainer.classList.remove('quote-expanded');
+                    quotedContainer.classList.add('quote-collapsed');
+                }
+            } else {
+                quotedContainer.innerHTML = '';
+                quotedContainer.classList.add('hidden', 'quote-collapsed');
+                quotedContainer.classList.remove('quote-expanded');
+            }
+        }
 
         if (extensionContainer) {
             extensionContainer.innerHTML = '';
@@ -1074,7 +1208,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const { acct } = sourcePost.account;
         const usernamePart = acct.includes('@') ? acct.split('@')[0] : acct;
         const instancePart = acct.includes('@') ? acct.split('@').slice(1).join('@') : fetchedInstance;
-        usernameEl.textContent = visibility.instance && instancePart ? `@${usernamePart}@${instancePart}` : `@${usernamePart}`;
+        const cleanUser = escapeHtml(usernamePart);
+        const cleanInst = escapeHtml(instancePart);
+        usernameEl.innerHTML = `<span>@${cleanUser}</span>${cleanInst ? `<span class="instance-part ${visibility.instance ? 'instance-visible' : 'instance-hidden'}">@${cleanInst}</span>` : ''}`;
 
 
         // Inject the processed content into the DOM AFTER user info is rendered.
@@ -1253,7 +1389,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create option text - reduced margin to 2
             const optionText = document.createElement('div');
             optionText.className = 'text-sm mr-2 flex-1';
-            optionText.textContent = option.title;
+            let optTitle = escapeHtml(option.title || '');
+            optTitle = replaceEmojis(optTitle, allEmojis);
+            optionText.innerHTML = optTitle;
 
             // Create votes text
             const votesText = document.createElement('div');
@@ -1300,11 +1438,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (timestampEl) {
             timestampEl.textContent = `${time} · ${date}`;
-            timestampEl.style.display = vis.timestamp ? 'block' : 'none';
+            timestampEl.classList.add('toggle-transition');
+            if (vis.timestamp) {
+                timestampEl.classList.remove('toggle-collapsed', 'hidden');
+                timestampEl.classList.add('toggle-expanded');
+            } else {
+                timestampEl.classList.remove('toggle-expanded');
+                timestampEl.classList.add('toggle-collapsed');
+            }
         }
 
         if (statsEl) {
-            statsEl.style.display = vis.stats ? 'flex' : 'none';
+            statsEl.classList.add('toggle-transition');
+            if (vis.stats) {
+                statsEl.classList.remove('toggle-collapsed', 'hidden');
+                statsEl.classList.add('toggle-expanded');
+            } else {
+                statsEl.classList.remove('toggle-expanded');
+                statsEl.classList.add('toggle-collapsed');
+            }
         }
 
         (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.repliesCount.toString();
@@ -1313,9 +1465,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const showBottom = vis.timestamp || vis.stats;
         if (bottomSection) {
-            bottomSection.style.display = showBottom ? 'block' : 'none';
-            bottomSection.style.borderTopWidth = showBottom ? '1px' : '0';
-            bottomSection.style.paddingTop = showBottom ? '1rem' : '0';
+            bottomSection.classList.add('toggle-transition');
+            if (showBottom) {
+                bottomSection.classList.remove('toggle-collapsed', 'hidden');
+                bottomSection.classList.add('toggle-expanded');
+            } else {
+                bottomSection.classList.remove('toggle-expanded');
+                bottomSection.classList.add('toggle-collapsed');
+            }
         }
     }
     function setPreviewState(state: 'loading' | 'content' | 'error') {

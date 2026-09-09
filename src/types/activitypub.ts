@@ -118,6 +118,7 @@ export interface FediversePost {
   poll?: FediversePoll;
   linkCards?: FediverseLinkCard[];
   extension?: FediverseExtension;
+  quotedPost?: FediversePost;
 }
 
 export interface FediverseAccount {
