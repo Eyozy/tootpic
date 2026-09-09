@@ -1,4 +1,4 @@
-import { type PlatformConfig, SUPPORTED_PLATFORMS } from '../types/activitypub';
+import { SUPPORTED_PLATFORMS } from '../types/activitypub';
 import { safeFetch } from './netHelpers';
 
 export interface ParsedUrl {
