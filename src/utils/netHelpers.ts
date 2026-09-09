@@ -1,3 +1,13 @@
+import net from 'node:net';
+import dns from 'node:dns';
+
+if (typeof net.setDefaultAutoSelectFamily === 'function') {
+  net.setDefaultAutoSelectFamily(false);
+}
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 const TAG_RE = /#([^\s#]+)/g;
 export const INTERNAL_HOST_PATTERNS = [
   /^localhost$/i,
@@ -8,8 +18,11 @@ export const INTERNAL_HOST_PATTERNS = [
   /^169\.254\./,
  /^0\./,
   /^::1$/,
-  /^fc00:/,
-  /^fe80:/,
+  /^::$/,
+  /^fc[0-9a-f]{2}:/i,
+  /^fd[0-9a-f]{2}:/i,
+  /^fe[89ab][0-9a-f]:/i,
+  /^::ffff:(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.|0\.)/i,
 ];
 
 function stripHtmlTags(text: string): string {
@@ -99,13 +112,138 @@ export function isSafeRemoteHttpUrl(rawUrl: string): boolean {
   try {
     const u = new URL(rawUrl);
     if (!['http:', 'https:'].includes(u.protocol)) return false;
-    const host = u.hostname.toLowerCase();
+    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (INTERNAL_HOST_PATTERNS.some(p => p.test(host))) return false;
     if (/[<>'"]/.test(rawUrl)) return false;
     return true;
   } catch {
     return false;
   }
+}
+
+export function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function isSafeIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) return false;
+    const [a, b] = parts;
+    if (a === 0) return false;
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a >= 224) return false;
+    return true;
+  }
+
+  if (net.isIPv6(ip)) {
+    const normalized = ip.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return false;
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return false;
+    if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return false;
+    if (normalized.startsWith('::ffff:')) {
+      return isSafeIp(normalized.replace('::ffff:', ''));
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export async function isSafeResolvedUrl(rawUrl: string): Promise<boolean> {
+  if (!isSafeRemoteHttpUrl(rawUrl)) return false;
+  try {
+    const u = new URL(rawUrl);
+    const addresses = await dns.promises.lookup(u.hostname, { all: true });
+    if (!addresses || addresses.length === 0) return false;
+    return addresses.every(addr => isSafeIp(addr.address));
+  } catch {
+    return false;
+  }
+}
+
+export async function safeFetch(
+  rawUrl: string,
+  init?: RequestInit,
+  maxRedirects = 3
+): Promise<Response> {
+  let currentUrl = rawUrl;
+  let redirects = 0;
+
+  while (redirects <= maxRedirects) {
+    const isSafe = await isSafeResolvedUrl(currentUrl);
+    if (!isSafe) {
+      throw new Error(`Forbidden target URL: ${currentUrl}`);
+    }
+
+    const res = await fetch(currentUrl, {
+      ...init,
+      redirect: 'manual',
+    });
+
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      const location = res.headers.get('location');
+      if (!location) return res;
+      currentUrl = new URL(location, currentUrl).toString();
+      redirects++;
+      continue;
+    }
+
+    return res;
+  }
+
+  throw new Error('Too many redirects');
+}
+
+export async function fetchWithLimit(
+  response: Response,
+  maxBytes: number
+): Promise<ArrayBuffer> {
+  const contentLength = Number(response.headers.get('content-length'));
+  if (contentLength && contentLength > maxBytes) {
+    throw new Error(`Content length ${contentLength} exceeds limit of ${maxBytes} bytes`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const buf = await response.arrayBuffer();
+    if (buf.byteLength > maxBytes) {
+      throw new Error(`Content length exceeds limit of ${maxBytes} bytes`);
+    }
+    return buf;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel();
+      throw new Error(`Received bytes exceeded limit of ${maxBytes}`);
+    }
+    chunks.push(value);
+  }
+
+  const result = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result.buffer;
 }
 
 const PRODUCTION_ORIGINS = ['https://tootpic.vercel.app'];
@@ -142,7 +280,7 @@ export function buildCorsHeaders(request: Request, methods: string): Record<stri
     'Vary': 'Origin',
   };
 
-  if (isAllowedRequestOrigin(origin, request.url)) {
+  if (origin && isAllowedRequestOrigin(origin, request.url)) {
     headers['Access-Control-Allow-Origin'] = origin;
   }
 

@@ -1,15 +1,16 @@
 import type { APIRoute } from 'astro';
-import { bufferToBody, isSafeRemoteHttpUrl } from '../../utils/netHelpers';
+import { bufferToBody, isSafeRemoteHttpUrl, safeFetch, fetchWithLimit, escapeHtml } from '../../utils/netHelpers';
 import { LRUCache } from '../../utils/apiCache';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 
 export const prerender = false;
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const thumbnailCache = new LRUCache<Buffer>(64, 60);
 
  
@@ -62,18 +63,31 @@ function extractVideoInfo(url: string): { platform: string; id: string; thumbnai
   }
 }
 
+let ffmpegAvailable: boolean | null = null;
+async function isFfmpegAvailable(): Promise<boolean> {
+  if (ffmpegAvailable !== null) return ffmpegAvailable;
+  try {
+    await execFileAsync('ffmpeg', ['-version'], { timeout: 2000 });
+    ffmpegAvailable = true;
+  } catch {
+    ffmpegAvailable = false;
+  }
+  return ffmpegAvailable;
+}
+
 /**
  * Fetch image from URL and return as buffer
  */
 async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer | null> {
   try {
-    const response = await fetch(imageUrl, {
+    const response = await safeFetch(imageUrl, {
       headers: {
         'User-Agent': 'TootPic/1.0 (+https://github.com/Eyozy/tootpic)',
       },
+      signal: AbortSignal.timeout(6000),
     });
     if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await fetchWithLimit(response, 10 * 1024 * 1024);
     return Buffer.from(arrayBuffer);
   } catch {
     return null;
@@ -86,22 +100,17 @@ async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer | null> {
  */
 async function downloadVideoBuffer(videoUrl: string, maxBytes: number, rangeHeader?: string): Promise<Buffer | null> {
   try {
-    const response = await fetch(videoUrl, {
+    const response = await safeFetch(videoUrl, {
       headers: {
         'User-Agent': 'TootPic/1.0 (+https://github.com/Eyozy/tootpic)',
         ...(rangeHeader ? { 'Range': rangeHeader } : {}),
       },
+      signal: AbortSignal.timeout(8000),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok && response.status !== 206) return null;
 
-    const contentLength = Number(response.headers.get('content-length') || 0);
-    if (!rangeHeader && contentLength && contentLength > maxBytes) {
-      return null;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > maxBytes) return null;
+    const arrayBuffer = await fetchWithLimit(response, maxBytes);
     return Buffer.from(arrayBuffer);
   } catch {
     return null;
@@ -110,58 +119,41 @@ async function downloadVideoBuffer(videoUrl: string, maxBytes: number, rangeHead
 
 async function runFfmpegThumbnail(videoBuffer: Buffer, seekSeconds: number): Promise<Buffer | null> {
   const tempDir = os.tmpdir();
-  const timestamp = Date.now();
-  const tempVideoPath = path.join(tempDir, `video-${timestamp}.mp4`);
-  const tempThumbPath = path.join(tempDir, `thumb-${timestamp}.jpg`);
+  const fileId = crypto.randomUUID();
+  const tempVideoPath = path.join(tempDir, `video-${fileId}.mp4`);
+  const tempThumbPath = path.join(tempDir, `thumb-${fileId}.jpg`);
 
   try {
-    // Write to temp file
-    fs.writeFileSync(tempVideoPath, videoBuffer);
-
-    // Use FFmpeg to extract first frame
-    // -i input: input file
-    // -ss 00:00:01: seek to 1 second (avoid black frames at start)
-    // -vframes 1: extract only 1 frame
-    // -q:v 2: quality (2 is good, 1 is best)
-    // -y: overwrite output
+    await fs.writeFile(tempVideoPath, videoBuffer);
     const safeSeekSeconds = Math.max(0.1, Math.min(5, seekSeconds));
-    await execAsync(
-      `ffmpeg -i "${tempVideoPath}" -ss ${safeSeekSeconds.toFixed(2)} -vframes 1 -q:v 2 -y "${tempThumbPath}"`,
+    await execFileAsync(
+      'ffmpeg',
+      ['-i', tempVideoPath, '-ss', safeSeekSeconds.toFixed(2), '-vframes', '1', '-q:v', '2', '-y', tempThumbPath],
       { timeout: 10000 }
     );
 
-    // Read the generated thumbnail
-    if (fs.existsSync(tempThumbPath)) {
-      const thumbnailBuffer = fs.readFileSync(tempThumbPath);
-      return thumbnailBuffer;
-    }
-
+    return await fs.readFile(tempThumbPath);
+  } catch {
     return null;
   } finally {
-    // Clean up temp files
-    try {
-      if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
-      if (fs.existsSync(tempThumbPath)) fs.unlinkSync(tempThumbPath);
-    } catch {
-      // Ignore cleanup errors
-    }
+    await Promise.all([
+      fs.unlink(tempVideoPath).catch(() => {}),
+      fs.unlink(tempThumbPath).catch(() => {}),
+    ]);
   }
 }
 
 async function generateVideoThumbnail(videoUrl: string, seekSeconds: number): Promise<Buffer | null> {
+  if (!(await isFfmpegAvailable())) return null;
+
   // First attempt: partial download (faster)
   const rangeBuffer = await downloadVideoBuffer(videoUrl, 4 * 1024 * 1024, 'bytes=0-4194303');
   if (rangeBuffer) {
     try {
       const thumb = await runFfmpegThumbnail(rangeBuffer, seekSeconds);
       if (thumb) return thumb;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      // If moov atom is missing, retry with a full download below.
-      if (!msg.includes('moov atom not found')) {
-        console.error('FFmpeg thumbnail generation failed:', error);
-        return null;
-      }
+    } catch {
+      // Ignore and fallback
     }
   }
 
@@ -170,8 +162,7 @@ async function generateVideoThumbnail(videoUrl: string, seekSeconds: number): Pr
   if (!fullBuffer) return null;
   try {
     return await runFfmpegThumbnail(fullBuffer, seekSeconds);
-  } catch (error) {
-    console.error('FFmpeg thumbnail generation failed:', error);
+  } catch {
     return null;
   }
 }
@@ -231,9 +222,9 @@ function videoPlaceholderSvg(platform?: string, videoUrl?: string): Response {
   <circle cx="320" cy="140" r="50" fill="rgba(255,255,255,0.95)"/>
   <path d="M305 125 L305 165 L345 145 Z" fill="${colors[0]}"/>
   <text x="320" y="240" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-        font-size="18" font-weight="600" fill="rgba(255,255,255,0.95)">${escapeXml(displayDomain)}</text>
+        font-size="18" font-weight="600" fill="rgba(255,255,255,0.95)">${escapeHtml(displayDomain)}</text>
   ${displayFilename ? `<text x="320" y="270" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-        font-size="14" fill="rgba(255,255,255,0.8)">${escapeXml(displayFilename)}</text>` : ''}
+        font-size="14" fill="rgba(255,255,255,0.8)">${escapeHtml(displayFilename)}</text>` : ''}
   <text x="320" y="310" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
         font-size="12" fill="rgba(255,255,255,0.6)">Video</text>
 </svg>`;
@@ -245,15 +236,6 @@ function videoPlaceholderSvg(platform?: string, videoUrl?: string): Response {
       'Cache-Control': 'public, max-age=3600',
     },
   });
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 function parseSeekSeconds(raw: string | null): number {

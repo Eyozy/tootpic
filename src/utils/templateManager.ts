@@ -2,7 +2,6 @@
  * Manages template selection and application, including layout and appearance modes.
  */
 
-import { TEMPLATES } from '../data/templates';
 import { TEMPLATE_NAMES, IMAGE_CONFIG } from '../constants';
 import { domCache } from './domCache';
 
@@ -10,44 +9,26 @@ export interface TemplateState {
   currentTemplate: string;
   isModalOpen: boolean;
   selectedTemplateId: string;
-  selectedLayout: string; // Add selectedLayout to state
-  selectedAppearance: string; // Add selectedAppearance to state
+  selectedLayout: string;
+  selectedAppearance: string;
 }
 
 export class TemplateManager {
   private state: TemplateState;
-  private eventListeners: Map<string, Function[]> = new Map();
 
   constructor() {
     this.state = {
       currentTemplate: 'classic',
       isModalOpen: false,
       selectedTemplateId: 'classic',
-      selectedLayout: 'classic', // Initialize selectedLayout
-      selectedAppearance: 'light', // Initialize selectedAppearance
+      selectedLayout: 'classic',
+      selectedAppearance: 'light',
     };
     this.bindEvents();
   }
 
-  /**
-   * Get current template ID
-   */
   getCurrentTemplate(): string {
     return this.state.currentTemplate;
-  }
-
-  /**
-   * Get template configuration
-   */
-  getTemplate(id: string) {
-    return TEMPLATES.find(template => template.id === id);
-  }
-
-  /**
-   * Get all templates
-   */
-  getAllTemplates() {
-    return TEMPLATES;
   }
 
   /**
@@ -164,32 +145,7 @@ export class TemplateManager {
     return IMAGE_CONFIG.TEMPLATE_BACKGROUNDS[id as keyof typeof IMAGE_CONFIG.TEMPLATE_BACKGROUNDS] || IMAGE_CONFIG.DEFAULT_BACKGROUND;
   }
 
-  /**
-   * Event management
-   */
-  on(event: string, callback: Function): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event)!.push(callback);
-  }
 
-  off(event: string, callback: Function): void {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    }
-  }
-
-  private emit(event: string, data?: any): void {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      listeners.forEach(callback => callback(data));
-    }
-  }
 
   /**
    * Bind global events with event delegation
