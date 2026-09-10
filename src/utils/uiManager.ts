@@ -1208,7 +1208,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const instancePart = acct.includes('@') ? acct.split('@').slice(1).join('@') : fetchedInstance;
         const cleanUser = escapeHtml(usernamePart);
         const cleanInst = escapeHtml(instancePart);
-        usernameEl.innerHTML = `<span>@${cleanUser}</span>${cleanInst ? `<span class="instance-part ${visibility.instance ? 'instance-visible' : 'instance-hidden'}">@${cleanInst}</span>` : ''}`;
+        const existingInstancePart = usernameEl.querySelector('.instance-part') as HTMLElement | null;
+        if (existingInstancePart && cleanInst) {
+            if (visibility.instance) {
+                existingInstancePart.classList.remove('instance-hidden');
+                existingInstancePart.classList.add('instance-visible');
+            } else {
+                existingInstancePart.classList.remove('instance-visible');
+                existingInstancePart.classList.add('instance-hidden');
+            }
+        } else {
+            usernameEl.innerHTML = `<span>@${cleanUser}</span>${cleanInst ? `<span class="instance-part ${visibility.instance ? 'instance-visible' : 'instance-hidden'}">@${cleanInst}</span>` : ''}`;
+        }
 
 
         // Inject the processed content into the DOM AFTER user info is rendered.

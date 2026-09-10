@@ -61,10 +61,6 @@ export class TemplateManager {
       }
     });
     document.dispatchEvent(event);
-    (this as unknown as { emit: (e: string, d: unknown) => void }).emit('templateChanged', {
-      oldTemplate,
-      newTemplate: templateId,
-    });
   }
 
   private updateTemplateName(templateId: string): void {
