@@ -3,7 +3,6 @@
  */
 
 import { TEMPLATE_NAMES, IMAGE_CONFIG } from '../constants';
-import { domCache } from './domCache';
 
 export interface TemplateState {
   currentTemplate: string;
@@ -31,14 +30,10 @@ export class TemplateManager {
     return this.state.currentTemplate;
   }
 
-  /**
-   * Switch to a template
-   */
   switchTemplate(templateId: string): void {
     if (templateId === this.state.currentTemplate) {
       return;
     }
-
     const oldTemplate = this.state.currentTemplate;
     this.state.currentTemplate = templateId;
     this.state.selectedTemplateId = templateId;
@@ -66,30 +61,22 @@ export class TemplateManager {
       }
     });
     document.dispatchEvent(event);
-
-    // Keep internal event for compatibility during transition
-    this.emit('templateChanged', {
+    (this as unknown as { emit: (e: string, d: unknown) => void }).emit('templateChanged', {
       oldTemplate,
       newTemplate: templateId,
     });
   }
 
-  /**
-   * Update template name display
-   */
   private updateTemplateName(templateId: string): void {
-    const nameElement = domCache.getElement('current-template-name');
+    const nameElement = document.getElementById('current-template-name');
     if (nameElement) {
       nameElement.textContent = TEMPLATE_NAMES[templateId as keyof typeof TEMPLATE_NAMES] || 'Classic';
       nameElement.setAttribute('data-template-id', templateId);
     }
   }
 
-  /**
-   * Update preview card class
-   */
   private updatePreviewCard(templateId: string): void {
-    const previewCard = domCache.querySelector('.preview-card');
+    const previewCard = document.querySelector('.preview-card');
     if (!previewCard) return;
 
     // Remove all template classes
@@ -100,46 +87,33 @@ export class TemplateManager {
   }
 
   
-  /**
-   * Open modal
-   */
   openModal(): void {
     this.state.isModalOpen = true;
-    const modal = domCache.getElement('template-modal');
+    const modal = document.getElementById('template-modal');
 
     if (modal) {
       modal.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
 
     // Update selection and focus
-    this.initializeSelections(); // Use the new initialization method
     const firstOption = modal.querySelector('.layout-option');
     if (firstOption) {
       (firstOption as HTMLElement).focus();
     }
     }
 
-    this.emit('modalOpened');
   }
 
-  /**
-   * Close modal
-   */
   closeModal(): void {
-    this.state.isModalOpen = false;
-    const modal = domCache.getElement('template-modal');
+    const modal = document.getElementById('template-modal');
 
     if (modal) {
       modal.classList.add('hidden');
       document.body.style.overflow = '';
     }
 
-    this.emit('modalClosed');
   }
 
-  /**
-   * Get template background color
-   */
   getTemplateBackgroundColor(templateId?: string): string {
     const id = templateId || this.state.currentTemplate;
     return IMAGE_CONFIG.TEMPLATE_BACKGROUNDS[id as keyof typeof IMAGE_CONFIG.TEMPLATE_BACKGROUNDS] || IMAGE_CONFIG.DEFAULT_BACKGROUND;
@@ -147,9 +121,6 @@ export class TemplateManager {
 
 
 
-  /**
-   * Bind global events with event delegation
-   */
   private bindEvents(): void {
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
@@ -160,7 +131,7 @@ export class TemplateManager {
 
     // Click outside modal
     document.addEventListener('click', (e) => {
-      const modal = domCache.getElement('template-modal');
+      const modal = document.getElementById('template-modal');
       const target = e.target as HTMLElement;
 
       if (this.state.isModalOpen && modal) {
@@ -209,9 +180,9 @@ export class TemplateManager {
    * Add enhanced transition effects for template switching
    */
   private addTransitionEffects(): void {
-    const previewCard = domCache.querySelector('.preview-card');
-    const templateName = domCache.getElement('current-template-name');
-    const templateContent = domCache.querySelector('.template-content');
+    const previewCard = document.querySelector('.preview-card');
+    const templateName = document.getElementById('current-template-name');
+    const templateContent = document.querySelector('.template-content');
 
     if (previewCard) {
       previewCard.classList.add('changing', 'switching');
@@ -226,13 +197,10 @@ export class TemplateManager {
     }
   }
 
-  /**
-   * Remove transition effects after animation completes
-   */
   private removeTransitionEffects(): void {
-    const previewCard = domCache.querySelector('.preview-card');
-    const templateName = domCache.getElement('current-template-name');
-    const templateContent = domCache.querySelector('.template-content');
+    const previewCard = document.querySelector('.preview-card');
+    const templateName = document.getElementById('current-template-name');
+    const templateContent = document.querySelector('.template-content');
 
     if (previewCard) {
       previewCard.classList.remove('changing', 'switching');
@@ -247,20 +215,8 @@ export class TemplateManager {
     }
   }
 
-  /**
-   * Cleanup
-   */
-  destroy(): void {
-    // Clear event listeners
-    this.eventListeners.clear();
+  destroy(): void {}
 
-    // Clear DOM cache
-    domCache.destroy();
-  }
-
-  /**
-   * Initializes the selected layout and appearance based on the current template.
-   */
   initializeSelections(): void {
     const currentTemplateId = this.getCurrentTemplate();
     // Determine layout and appearance from currentTemplateId
@@ -311,9 +267,6 @@ export class TemplateManager {
     this.applySelectedTemplate(); // Apply immediately on appearance change
   }
 
-  /**
-   * Maps layout and appearance combination to template ID
-   */
   private mapToTemplateId(layout: string, appearance: string): string {
     const templateMap: Record<string, Record<string, string>> = {
       'classic': {
@@ -329,9 +282,6 @@ export class TemplateManager {
     return templateMap[layout]?.[appearance] || 'classic';
   }
 
-  /**
-   * Applies the selected template based on the current layout and appearance.
-   */
   applySelectedTemplate(): void {
     try {
       const templateId = this.mapToTemplateId(this.state.selectedLayout, this.state.selectedAppearance);
@@ -344,7 +294,7 @@ export class TemplateManager {
   }
 
   private updateSelectionUI(): void {
-    const layoutOptions = domCache.querySelectorAll('.layout-option');
+    const layoutOptions = document.querySelectorAll('.layout-option');
     layoutOptions.forEach(option => {
       const layout = option.getAttribute('data-layout');
       if (layout === this.state.selectedLayout) {
@@ -356,7 +306,7 @@ export class TemplateManager {
       }
     });
 
-    const appearanceRadios = domCache.querySelectorAll<HTMLInputElement>('input[name="appearance"]');
+    const appearanceRadios = document.querySelectorAll<HTMLInputElement>('input[name="appearance"]');
     appearanceRadios.forEach(radio => {
       if (radio.value === this.state.selectedAppearance) {
         radio.checked = true;
@@ -366,10 +316,10 @@ export class TemplateManager {
     });
 
     // Update schematic visibility based on selected appearance and layout
-    const classicLight = domCache.querySelector('.layout-classic-light');
-    const classicDark = domCache.querySelector('.layout-classic-dark');
-    const magazineLight = domCache.querySelector('.layout-magazine-light');
-    const magazineDark = domCache.querySelector('.layout-magazine-dark');
+    const classicLight = document.querySelector('.layout-classic-light');
+    const classicDark = document.querySelector('.layout-classic-dark');
+    const magazineLight = document.querySelector('.layout-magazine-light');
+    const magazineDark = document.querySelector('.layout-magazine-dark');
 
     // Always show light version for non-selected layouts, or if selected layout is light
     if (classicLight) classicLight.classList.remove('hidden');

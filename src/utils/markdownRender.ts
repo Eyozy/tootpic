@@ -289,3 +289,22 @@ export function renderMarkdownToHtml(markdown: string, options?: RenderOptions):
 
   return out.join('\n');
 }
+
+export function detectsMarkdown(text: string): boolean {
+  const input = String(text || '');
+  if (!input.trim()) return false;
+
+  return (
+    /(^|\n)\s{0,3}#{1,6}\s+\S/.test(input) || // headings
+    /(^|\n)\s*>\s+/.test(input) || // blockquote
+    /(^|\n)\s*[-*+]\s+\S/.test(input) || // list
+    /(^|\n)\s*\d+\.\s+\S/.test(input) || // ordered list
+    /(^|\n)```/.test(input) || // code fence
+    /\[([^\]]+?)\]\((https?:\/\/[^)]+?)\)/i.test(input) || // markdown link
+    /!\[[^\]]*?\]\((https?:\/\/[^)]+?)\)/i.test(input) || // markdown image
+    /\*\*[^*]+\*\*/.test(input) || // bold
+    /\*[^*]+\*/.test(input) || // italic
+    /`[^`]+`/.test(input) || // inline code
+    /~~[^~]+~~/.test(input) // strikethrough
+  );
+}

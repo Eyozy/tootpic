@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { bufferToBody, isSafeRemoteHttpUrl, safeFetch, fetchWithLimit, escapeHtml } from '../../utils/netHelpers';
-import { LRUCache } from '../../utils/apiCache';
+import { LRUCache } from '../../utils/lruCache';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';

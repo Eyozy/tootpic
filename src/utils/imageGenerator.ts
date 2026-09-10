@@ -1,8 +1,23 @@
-import { domCache } from './domCache';
 import { templateManager } from './templateManager';
 import { API_CONFIG, IMAGE_CONFIG } from '../constants';
 import { snapdom } from '@zumer/snapdom';
-import { mapVideoThumbnailData, formatVideoAlt } from './uiHelpers';
+
+function mapVideoThumbnailData(
+  items: Array<{ attachmentIndex: number; src: string; isVideo: boolean }>,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const item of items) {
+    if (!item.isVideo) continue;
+    if (!item.src || !item.src.startsWith('data:')) continue;
+    map[String(item.attachmentIndex)] = item.src;
+  }
+  return map;
+}
+
+function formatVideoAlt(index: number): string {
+  const safeIndex = Number.isFinite(index) ? index : 0;
+  return `Video ${safeIndex + 1}`;
+}
 
 export interface GenerationOptions {
   quality?: number;
@@ -15,8 +30,8 @@ export class ImageGenerator {
   private copyBtn: HTMLButtonElement | null = null;
 
   constructor() {
-    this.downloadBtn = domCache.getElement('download-btn');
-    this.copyBtn = domCache.getElement('copy-btn');
+    this.downloadBtn = document.getElementById('download-btn') as HTMLButtonElement | null;
+    this.copyBtn = document.getElementById('copy-btn') as HTMLButtonElement | null;
   }
 
   /**
@@ -29,11 +44,12 @@ export class ImageGenerator {
       backgroundColor = templateManager.getTemplateBackgroundColor(),
     } = options;
 
-    const originalNode = domCache.getElement('style-a-container');
+    const originalNode = document.getElementById('style-a-container');
     if (!originalNode) {
       throw new Error('Preview container not found');
     }
 
+    this.downloadBtn = this.downloadBtn || document.getElementById('download-btn') as HTMLButtonElement | null;
     if (!this.downloadBtn) {
       throw new Error('Download button not found');
     }
@@ -87,11 +103,12 @@ export class ImageGenerator {
    * Generate image and copy to clipboard
    */
   async generateAndCopy(): Promise<void> {
-    const originalNode = domCache.getElement('style-a-container');
+    const originalNode = document.getElementById('style-a-container');
     if (!originalNode) {
       throw new Error('Preview container not found');
     }
 
+    this.copyBtn = this.copyBtn || document.getElementById('copy-btn') as HTMLButtonElement | null;
     if (!this.copyBtn) {
       throw new Error('Copy button not found');
     }
@@ -743,9 +760,9 @@ export class ImageGenerator {
   }
 
   private async copyAltTextToClipboard(): Promise<boolean> {
-    const contentEl = domCache.getElement('style-a-content');
-    const cwBannerEl = domCache.getElement('content-warning-banner');
-    const cwTextEl = domCache.getElement('content-warning-text');
+    const contentEl = document.getElementById('style-a-content');
+    const cwBannerEl = document.getElementById('content-warning-banner');
+    const cwTextEl = document.getElementById('content-warning-text');
 
     if (!contentEl) {
       console.warn('Content element for alt text not found.');
@@ -781,11 +798,12 @@ export class ImageGenerator {
   }
 
   private setDownloadButtonState(text: string): void {
+    this.downloadBtn = this.downloadBtn || document.getElementById('download-btn') as HTMLButtonElement | null;
     if (this.downloadBtn) {
       this.downloadBtn.disabled = true;
       this.downloadBtn.textContent = text;
     }
-    const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
+    const previewStatus = document.getElementById('preview-status') as HTMLSpanElement | null;
     if (previewStatus) {
       previewStatus.textContent = text;
       previewStatus.className = 'text-sm text-blue-600';
@@ -795,8 +813,9 @@ export class ImageGenerator {
   private resetDownloadButton(generationSuccess: boolean = false, copySuccess: boolean = false): void {
     if (!this.downloadBtn) return;
 
-    this.downloadBtn.disabled = false;
-    const previewStatus = domCache.getElement('preview-status') as HTMLSpanElement;
+    this.downloadBtn = this.downloadBtn || document.getElementById('download-btn') as HTMLButtonElement | null;
+    if (!this.downloadBtn) return;
+    const previewStatus = document.getElementById('preview-status') as HTMLSpanElement | null;
 
     if (generationSuccess) {
       if (copySuccess) {

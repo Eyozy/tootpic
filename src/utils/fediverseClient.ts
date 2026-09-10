@@ -1,8 +1,8 @@
 import { parseFediverseUrl, convertMastodonToUniversal, convertActivityPubToUniversal } from './activitypubParser';
 import { extractHashtagNames, safeFetch } from './netHelpers';
 import type { FediversePost, FediverseAccount } from '../types/activitypub';
-import { SUPPORTED_PLATFORMS } from '../types/activitypub';
-import { LRUCache } from './apiCache';
+import { SUPPORTED_PLATFORMS } from '../constants/platforms';
+import { LRUCache } from './lruCache';
 
 export interface FetchPostResult {
   success: boolean;

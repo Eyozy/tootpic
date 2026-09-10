@@ -1,9 +1,7 @@
 import { templateManager } from './templateManager';
 import { imageGenerator } from './imageGenerator';
-import { domCache } from './domCache';
 import { DOM_ELEMENT_IDS } from '../constants';
-import { renderMarkdownToHtml } from './markdownRender';
-import { detectsMarkdown, computeMediaGridStyle } from './uiHelpers';
+import { renderMarkdownToHtml, detectsMarkdown } from './markdownRender';
 import type { FediversePost, FediverseAttachment, FediversePoll } from '../types/activitypub';
 import DOMPurify from 'dompurify';
 
@@ -44,28 +42,43 @@ interface StreamedImageData {
     dataUrl: string;
 }
 
+function computeMediaGridStyle({
+    count,
+    hasVideosOrGifs,
+}: {
+    count: number;
+    hasVideosOrGifs: boolean;
+}): { columns: string; aspectRatio?: string } {
+    const columns = count > 1 ? '1fr 1fr' : '1fr';
+    let aspectRatio: string | undefined;
+    if (count >= 2 && !hasVideosOrGifs) {
+        aspectRatio = '3 / 2';
+    }
+    return { columns, aspectRatio };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    const urlInput = domCache.getElement(DOM_ELEMENT_IDS.MASTODON_URL) as HTMLInputElement;
-    const generateBtn = domCache.getElement(DOM_ELEMENT_IDS.GENERATE_BTN) as HTMLButtonElement;
-    const downloadBtn = domCache.getElement(DOM_ELEMENT_IDS.DOWNLOAD_BTN) as HTMLButtonElement;
-    const copyBtn = domCache.getElement(DOM_ELEMENT_IDS.COPY_BTN) as HTMLButtonElement;
-    const errorMessage = domCache.getElement(DOM_ELEMENT_IDS.ERROR_MESSAGE) as HTMLDivElement;
-    const previewArea = domCache.getElement(DOM_ELEMENT_IDS.PREVIEW_AREA) as HTMLDivElement;
-    const loader = domCache.getElement(DOM_ELEMENT_IDS.LOADER) as HTMLDivElement;
-    const styleAContainer = domCache.getElement(DOM_ELEMENT_IDS.STYLE_A_CONTAINER) as HTMLDivElement;
-    const clearUrlBtn = domCache.getElement(DOM_ELEMENT_IDS.CLEAR_URL_BTN) as HTMLButtonElement;
+    const urlInput = document.getElementById(DOM_ELEMENT_IDS.MASTODON_URL) as HTMLInputElement;
+    const generateBtn = document.getElementById(DOM_ELEMENT_IDS.GENERATE_BTN) as HTMLButtonElement;
+    const downloadBtn = document.getElementById(DOM_ELEMENT_IDS.DOWNLOAD_BTN) as HTMLButtonElement;
+    const copyBtn = document.getElementById(DOM_ELEMENT_IDS.COPY_BTN) as HTMLButtonElement;
+    const errorMessage = document.getElementById(DOM_ELEMENT_IDS.ERROR_MESSAGE) as HTMLDivElement;
+    const previewArea = document.getElementById(DOM_ELEMENT_IDS.PREVIEW_AREA) as HTMLDivElement;
+    const loader = document.getElementById(DOM_ELEMENT_IDS.LOADER) as HTMLDivElement;
+    const styleAContainer = document.getElementById(DOM_ELEMENT_IDS.STYLE_A_CONTAINER) as HTMLDivElement;
+    const clearUrlBtn = document.getElementById(DOM_ELEMENT_IDS.CLEAR_URL_BTN) as HTMLButtonElement;
     const visibilityCheckboxes = document.querySelectorAll<HTMLInputElement>('input[name="visibility"]');
-    const templateToggle = domCache.getElement(DOM_ELEMENT_IDS.TEMPLATE_TOGGLE) as HTMLButtonElement;
-    const optionsToggle = domCache.getElement(DOM_ELEMENT_IDS.OPTIONS_TOGGLE) as HTMLButtonElement;
-    const optionsContent = domCache.getElement(DOM_ELEMENT_IDS.OPTIONS_CONTENT) as HTMLDivElement;
-    const optionsIcon = domCache.getElement(DOM_ELEMENT_IDS.OPTIONS_ICON) as SVGElement;
-    const previewStatus = domCache.getElement(DOM_ELEMENT_IDS.PREVIEW_STATUS) as HTMLSpanElement;
-    const contentWarningBanner = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_BANNER) as HTMLDivElement;
-    const contentWarningText = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TEXT) as HTMLSpanElement;
-    const contentWarningToggle = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
-    const contentWarningToggleContainer = domCache.getElement(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
-    const quoteToggleContainer = domCache.getElement('quote-toggle-container') as HTMLDivElement;
-    const extensionContainer = domCache.getElement(DOM_ELEMENT_IDS.EXTENSION) as HTMLDivElement;
+    const templateToggle = document.getElementById(DOM_ELEMENT_IDS.TEMPLATE_TOGGLE) as HTMLButtonElement;
+    const optionsToggle = document.getElementById(DOM_ELEMENT_IDS.OPTIONS_TOGGLE) as HTMLButtonElement;
+    const optionsContent = document.getElementById(DOM_ELEMENT_IDS.OPTIONS_CONTENT) as HTMLDivElement;
+    const optionsIcon = document.getElementById(DOM_ELEMENT_IDS.OPTIONS_ICON) as SVGElement;
+    const previewStatus = document.getElementById(DOM_ELEMENT_IDS.PREVIEW_STATUS) as HTMLSpanElement;
+    const contentWarningBanner = document.getElementById(DOM_ELEMENT_IDS.CONTENT_WARNING_BANNER) as HTMLDivElement;
+    const contentWarningText = document.getElementById(DOM_ELEMENT_IDS.CONTENT_WARNING_TEXT) as HTMLSpanElement;
+    const contentWarningToggle = document.getElementById(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE) as HTMLInputElement;
+    const contentWarningToggleContainer = document.getElementById(DOM_ELEMENT_IDS.CONTENT_WARNING_TOGGLE_CONTAINER) as HTMLDivElement;
+    const quoteToggleContainer = document.getElementById('quote-toggle-container') as HTMLDivElement;
+    const extensionContainer = document.getElementById(DOM_ELEMENT_IDS.EXTENSION) as HTMLDivElement;
 
     let postData: FediversePost | null = null;
     let fetchedInstance = '';
@@ -642,7 +655,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Use the current post's data (no reblog handling for now as most platforms handle this differently)
         const sourcePost: FediversePost = postData;
 
-        // --- 1. Handle Content Warning ---
         if (contentWarningBanner && contentWarningText) {
             const hasContent = sourcePost.sensitive || !!sourcePost.spoilerText;
             const warningText = sourcePost.spoilerText || 'Sensitive content';
@@ -671,9 +683,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, delay as number); // Immediate if content changed, debounced if just re-rendering
         }
 
-    /**
-     * Update content warning banner with optimized animations using CSS classes
-     */
     function updateContentWarningBanner(banner: HTMLElement, textElement: HTMLElement, warningText: string, shouldShow: boolean) {
         contentWarningAnimationState.isAnimating = true;
 
@@ -722,8 +731,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-        // --- 2. Process Content and Emojis ---
-        // Sanitize and prepare the main post content.
         // Special handling for PeerTube videos - show video title prominently
         let contentHTML = sourcePost.content;
         let isPeerTubeVideo = false;
@@ -996,7 +1003,6 @@ document.addEventListener('DOMContentLoaded', () => {
             hashtag.classList.add('inline-block', 'text-blue-600', 'hover:text-blue-800', 'font-medium');
         });
 
-        // --- 2.6 Ech0 Extension (MUSIC/VIDEO/WEBSITE/...) ---
         // Do not render extension as a card; append the extension URL to content as a link.
         const ext = (sourcePost as any).extension as { type?: string; url?: string } | undefined;
         const extUrl = typeof ext?.url === 'string' ? ext.url.trim() : '';
@@ -1067,7 +1073,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let displayNameHTML = escapeHtml(sourcePost.account.displayName || '');
         displayNameHTML = replaceEmojis(displayNameHTML, allEmojis);
 
-        // --- 2.5 Process Tags with Smart Deduplication ---
         const tagsContainer = document.getElementById('tags-container') as HTMLDivElement | null;
         if (tagsContainer) {
             tagsContainer.innerHTML = '';
@@ -1116,7 +1121,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // --- 2.6 Render Quoted Post Card with Smooth Transitions ---
         const quotedContainer = document.getElementById('quoted-post-container') as HTMLDivElement | null;
         if (quotedContainer) {
             quotedContainer.classList.add('quoted-post-card');
@@ -1169,8 +1173,6 @@ document.addEventListener('DOMContentLoaded', () => {
             extensionContainer.className = 'mt-3 hidden';
         }
 
-        // --- 2. Render User and Content Information ---
-        // Render the user's avatar, display name, and username FIRST (before content)
         let avatarHTML = '';
 
 
@@ -1193,9 +1195,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Render avatar and user info first
-        const avatarContainerEl = domCache.getElement(DOM_ELEMENT_IDS.AVATAR_CONTAINER) as HTMLDivElement;
-        const displayNameEl = domCache.getElement(DOM_ELEMENT_IDS.DISPLAY_NAME) as HTMLDivElement;
-        const usernameEl = domCache.getElement(DOM_ELEMENT_IDS.USERNAME) as HTMLDivElement;
+        const avatarContainerEl = document.getElementById(DOM_ELEMENT_IDS.AVATAR_CONTAINER) as HTMLDivElement;
+        const displayNameEl = document.getElementById(DOM_ELEMENT_IDS.DISPLAY_NAME) as HTMLDivElement;
+        const usernameEl = document.getElementById(DOM_ELEMENT_IDS.USERNAME) as HTMLDivElement;
 
         avatarContainerEl.innerHTML = avatarHTML;
         displayNameEl.innerHTML = displayNameHTML;
@@ -1212,12 +1214,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Inject the processed content into the DOM AFTER user info is rendered.
         // Ech0 Markdown renderer outputs multiple <p> blocks; our global stylesheet gives <p> a large bottom margin
         // which can look like "extra blank lines" in the generated image. Tag the container so CSS can tune spacing.
-        const contentEl = domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
+        const contentEl = document.getElementById(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
         contentEl.classList.toggle('platform-ech0', sourcePost.platform === 'ech0');
         contentEl.innerHTML = sanitizeHtml(contentHTML);
 
-        // --- 3. Render Media and Footer ---
-        // Render media attachments like images and videos.
         renderMedia(sourcePost.attachments, imageMap);
 
         // Render poll results if present
@@ -1239,8 +1239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render the footer section, which includes stats and the timestamp.
         renderFooter(sourcePost, visibility, formattedTime, formattedDate);
 
-        // --- 4. Finalize UI State ---
-        // Show the populated preview card.
         setPreviewState('content');
 
         // Reset render lock and check for pending render
@@ -1292,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param imgMap - A map of image URLs to their Base64 data URLs.
      */
     function renderMedia(attachments: FediverseAttachment[], imgMap: Record<string, string>) {
-        const container = domCache.getElement(DOM_ELEMENT_IDS.ATTACHMENT) as HTMLDivElement;
+        const container = document.getElementById(DOM_ELEMENT_IDS.ATTACHMENT) as HTMLDivElement;
         if (!container) return;
         container.innerHTML = '';
         container.className = 'mt-3 rounded-lg overflow-hidden border border-brand-gray-200 bg-gray-100';
@@ -1455,17 +1453,16 @@ document.addEventListener('DOMContentLoaded', () => {
         pollContainer.appendChild(pollInfo);
 
         // Insert poll after content
-        const contentEl = domCache.getElement(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
+        const contentEl = document.getElementById(DOM_ELEMENT_IDS.CONTENT) as HTMLDivElement;
         if (contentEl.parentNode) {
             contentEl.parentNode.insertBefore(pollContainer, contentEl.nextSibling);
         }
     }
 
-    // --- Helper functions ---
     function renderFooter(post: FediversePost, vis: typeof visibility, time: string, date: string) {
-        const bottomSection = domCache.getElement(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement;
-        const timestampEl = domCache.getElement(DOM_ELEMENT_IDS.TIMESTAMP) as HTMLDivElement;
-        const statsEl = domCache.getElement(DOM_ELEMENT_IDS.STATS) as HTMLDivElement;
+        const bottomSection = document.getElementById(DOM_ELEMENT_IDS.BOTTOM_SECTION) as HTMLDivElement;
+        const timestampEl = document.getElementById(DOM_ELEMENT_IDS.TIMESTAMP) as HTMLDivElement;
+        const statsEl = document.getElementById(DOM_ELEMENT_IDS.STATS) as HTMLDivElement;
 
         if (timestampEl) {
             timestampEl.textContent = `${time} · ${date}`;
@@ -1490,9 +1487,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        (domCache.getElement(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.repliesCount.toString();
-        (domCache.getElement(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.boostsCount.toString();
-        (domCache.getElement(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favouritesCount.toString();
+        (document.getElementById(DOM_ELEMENT_IDS.REPLIES) as HTMLSpanElement).textContent = post.repliesCount.toString();
+        (document.getElementById(DOM_ELEMENT_IDS.BOOSTS) as HTMLSpanElement).textContent = post.boostsCount.toString();
+        (document.getElementById(DOM_ELEMENT_IDS.FAVS) as HTMLSpanElement).textContent = post.favouritesCount.toString();
 
         const showBottom = vis.timestamp || vis.stats;
         if (bottomSection) {
